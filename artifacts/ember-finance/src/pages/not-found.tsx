@@ -1,23 +1,9 @@
-import { Card, CardContent } from '@/components/ui/card';
-import { AlertCircle } from 'lucide-react';
+import { Link } from "wouter";
+import { Button } from "@workspace/ember-design-system/components/ui/button";
+import { Flame } from "lucide-react";
 
-export default function NotFound() {
-  return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50">
-      <Card className="w-full max-w-md mx-4">
-        <CardContent className="pt-6">
-          <div className="flex mb-4 gap-2">
-            <AlertCircle className="h-8 w-8 text-red-500" />
-            <h1 className="text-2xl font-bold text-gray-900">
-              404 Page Not Found
-            </h1>
-          </div>
-
-          <p className="mt-4 text-sm text-gray-600">
-            Did you forget to add the page to the router?
-          </p>
-        </CardContent>
-      </Card>
-    </div>
-  );
+export default function NotFoundPage() {
+  return <main className="ember-atmosphere dark flex min-h-[100dvh] items-center justify-center px-5 text-foreground">
+    <div className="relative z-10 max-w-lg text-center"><div className="mx-auto flex size-12 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary"><Flame /></div><p className="mt-8 text-xs uppercase tracking-[0.2em] text-primary">404 · off the map</p><h1 className="mt-3 text-4xl font-light tracking-tight">This page wandered off.</h1><p className="mt-4 text-sm leading-relaxed text-muted-foreground">The link may have changed, or this space may not exist. Your money is still where you left it.</p><Button asChild className="mt-7" data-testid="button-back-home"><Link href="/">Return to Ember</Link></Button></div>
+  </main>;
 }
