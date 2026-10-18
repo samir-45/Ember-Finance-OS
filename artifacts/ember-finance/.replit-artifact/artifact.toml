@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Ember — Personal Finance OS"
+description = "A personal finance workspace for freelancers earning in USD and spending in BDT. Track accounts, real currency conversions, transactions, budgets, goals, and subscriptions; review cash flow and coaching insights from one command center."
+version = "1.0.0"
+id = "artifacts/ember-finance"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23344
+
+[services.development]
+run = "pnpm --filter @workspace/ember-finance run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ember-finance", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/ember-finance/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23344"
+BASE_PATH = "/"
