@@ -1,0 +1,168 @@
+# MASTER PROMPT: "EMBER" — Personal Finance OS (Version 1)
+
+Paste everything below into Replit Agent or Manus AI. If the tool struggles with the size, paste it in the 4 phases listed at the end, one at a time.
+
+---
+
+## 1. ROLE AND GOAL
+
+You are a senior full-stack engineer and product designer. Build **Ember**, a production-grade personal finance web app for a freelancer who earns in **USD**, converts to **BDT** (Bangladeshi Taka), and spends in both currencies.
+
+Ember tracks every income and expense, shows exactly where money goes (by category, sub-category, payment method, and subscription), and acts as a **financial coach** that tells the user what to improve next.
+
+Build a complete, working, deployable V1. No placeholders, no fake "coming soon" buttons, no lorem ipsum. Seed realistic demo data so every screen looks alive on first load.
+
+---
+
+## 2. TECH STACK
+
+- Next.js (App Router) + TypeScript (strict)
+- Tailwind CSS + shadcn/ui primitives, Framer Motion for animation
+- PostgreSQL with Drizzle ORM (or Prisma)
+- Auth: email + password with secure sessions (Auth.js or equivalent)
+- Charts: Recharts
+- Validation: Zod on every API input
+- Drag and drop: dnd-kit
+- AI coach: Google Gemini API by default, called server-side only (API key in env var, never exposed to the browser). Build a small provider abstraction (`AI_PROVIDER`, `AI_API_KEY`, `AI_MODEL` env vars) so the provider can be switched later to OpenAI or Anthropic by changing config only. Use a current fast, low-cost Gemini model (Flash tier) as the default.
+
+---
+
+## 3. CORE CONCEPTS (DATA MODEL)
+
+**Money rule:** store all amounts as integers in minor units (cents/poisha). Never use floats for money.
+
+Tables:
+- **users**: id, email, password_hash, base_currency (default BDT), created_at
+- **accounts**: id, user_id, name, type (bank, wallet, cash, card, payoneer, paypal), currency (USD or BDT), opening_balance
+- **categories**: id, user_id, name, parent_id (for sub-categories), type (income or expense), color, icon. Seed: Groceries (Vegetables, Meat and Fish, Snacks, Household), Rent, Utilities, Transport, Subscriptions, Dining, Health, Education, Family, Shopping, Savings, Investments, Taxes and Fees, Other
+- **transactions**: id, user_id, account_id, category_id, type (income, expense, transfer), amount, currency, note, merchant, date, tags, payment_method, status (todo/planned, pending, done)
+- **transfers**: id, from_account_id, to_account_id, amount_out, amount_in, exchange_rate (auto-calculated as amount_in / amount_out), fee, date. This is how a USD to BDT conversion is recorded, so the REAL rate the user got is always preserved.
+- **subscriptions**: id, name, amount, currency, billing_cycle, next_billing_date, category_id, account_id, active
+- **budgets**: id, category_id, month, limit_amount
+- **goals**: id, name, target_amount, current_amount, deadline
+- **exchange_rates**: date, from, to, rate (used only for converting totals when no transfer rate applies)
+- **coach_insights**: id, user_id, created_at, type, severity, title, body, action
+
+---
+
+## 4. MULTI-CURRENCY LOGIC (IMPORTANT)
+
+1. Each account has one currency. A USD client payment is **income** into a USD account.
+2. Converting to BDT is a **transfer** (USD account to BDT account) with both amounts entered; the exchange rate is derived and stored.
+3. Expenses are recorded from the account actually used, in that account's currency.
+4. Dashboard has a currency toggle: **BDT / USD / Original**. Totals convert using the most recent real transfer rate; fall back to the `exchange_rates` table if none exists.
+5. Always show a small label like "converted at 1 USD = 121.5 BDT" so conversions are never a mystery.
+6. Add a "Conversion Tracker" card: average rate achieved, best rate, worst rate, total fees paid, so the user sees what conversions cost them.
+
+---
+
+## 5. SCREENS AND FEATURES
+
+### 5.1 Command Center (main dashboard, Kanban style)
+A board of draggable glass cards arranged in columns. The user can rearrange cards; save layout per user.
+
+Top strip (KPI cards): Net worth, This month income, This month spent, Savings rate %, Runway (months of expenses covered by current balances).
+
+Columns / widgets:
+- **Cash Flow**: income vs expense, monthly area chart
+- **Where It Went**: donut chart by category with percentages, click a slice to drill into sub-categories (e.g., Groceries to Vegetables vs Meat and Fish vs Snacks)
+- **Accounts**: each account with balance and currency
+- **Payment Methods**: spending split by account/method
+- **Subscriptions**: list with monthly total, next billing dates, "total per year" warning
+- **Budgets**: progress bars with color shifts (calm to amber to red as limit approaches)
+- **Goals**: progress rings
+- **Coach**: latest 3 insights (see 5.4)
+- **Recent Activity**: latest transactions
+
+### 5.2 Transactions Board (Kanban)
+Columns: **Planned → Pending → Done**. Cards are transactions; dragging between columns updates status. Filters by date, category, account, currency, tag. Search. Bulk edit. CSV import and export.
+
+### 5.3 Quick Add
+Floating "+" button, and keyboard shortcut **N**. A fast form: amount, currency, category, account, note, date. Support natural-language entry: typing `groceries 1200 bkash` or `client payment 800 usd payoneer` auto-fills the fields (parse with the AI API, with a simple regex fallback). Include a dedicated **Convert Currency** quick action that creates the transfer.
+
+### 5.4 Financial Coach (the smart part)
+Two layers:
+
+**Layer 1: Rules engine (deterministic, always works, no AI needed).** Run after every change and daily:
+- 50/30/20 check: needs / wants / savings share of income, compared to targets
+- Savings rate below 20% triggers a warning
+- Category spike: any category more than 30% above its 3-month average
+- Subscription creep: subscriptions above 5% of income, or unused/duplicate-looking ones
+- Emergency fund: balances vs 3 to 6 months of expenses
+- Income volatility: freelance income varies, so suggest a "buffer month" rule (pay yourself a fixed salary from a buffer)
+- Conversion tip: flag when conversions happened at a rate well below the user's average
+- Fee drag: total fees paid this quarter
+
+**Layer 2: AI explanation.** Send only anonymized monthly aggregates (never raw notes or merchant names unless the user turns on a setting) to the configured AI provider and ask for a short, plain-language monthly review: what went well, what to fix, and the single most important next action. Show it as a card with a "Next Focus" highlight. Cache results; regenerate monthly or on demand. If the API is unavailable, show the rules-engine insights only.
+
+Each insight has: severity (info/warning/critical), a plain-language title, one-sentence reason, and one concrete action button (e.g., "Set a Dining budget of 8,000 BDT").
+
+Add a **Money Health Score** (0 to 100) built from savings rate, budget adherence, emergency fund, and subscription load, shown as a glowing ring.
+
+### 5.5 Reports
+Monthly and yearly report pages: income, expenses, top categories, month-over-month change, subscription total, conversion summary. Export as PDF and CSV.
+
+### 5.6 Settings
+Profile, base currency, categories manager, accounts manager, budgets, data export, delete account, AI coach on/off, and privacy toggle.
+
+---
+
+## 6. UI / DESIGN SYSTEM (VERY IMPORTANT)
+
+**Mood:** premium, dark, cinematic, calm and minimal despite the fire. Think Apple visionOS glass meets a molten ember glow.
+
+**Background:**
+- Base: near-black (#050505) with subtle film-grain noise overlay.
+- Hyper-realistic fiery gradient: layered, blurred radial gradients in deep crimson (#7a0a0a), ember red (#ff3b1f), and a touch of burnt orange (#ff6a2b), placed low and in the corners like glowing embers behind the interface. Very slow animated drift (60s loops, CSS/Canvas, GPU-friendly). The center stays dark so content remains readable.
+- Optional: tiny floating ember particles (canvas), kept subtle, disabled when `prefers-reduced-motion` is on.
+
+**Glass cards:**
+- Background rgba(255,255,255,0.04 to 0.07), `backdrop-filter: blur(24px) saturate(140%)`
+- 1px border rgba(255,255,255,0.10), with a faint top-edge highlight (inner glow)
+- Corner radius **16px** (softly rounded, not pill-shaped, not sharp)
+- Soft shadow with a very faint red tint
+- Hover: slight lift, border brightens, subtle red glow
+
+**Typography:** Inter or Geist; large light-weight numbers for money, small uppercase muted labels; tabular numerals for all amounts.
+
+**Color use:** mostly black, white, and gray. Red/orange only as accent: primary buttons, active states, key chart series, alerts. Income is a calm soft green or white, expenses are ember red. Don't overuse color.
+
+**Motion:** Framer Motion; numbers count up on load, cards fade/slide in with a stagger, drag-and-drop feels physical. Keep it smooth (60fps).
+
+**Layout:** left slim icon sidebar (glass), top bar with currency toggle and quick add, a responsive grid. Fully responsive: on mobile, cards stack and the sidebar becomes a bottom tab bar.
+
+**Details:** skeleton loaders in glass style, empty states with a short helpful message, accessible contrast (WCAG AA for text), full keyboard support, dark mode only for V1.
+
+---
+
+## 7. SECURITY AND PRODUCTION QUALITY
+
+- Hash passwords with argon2 or bcrypt; secure HTTP-only cookies; CSRF protection
+- Every query scoped by `user_id`; verify ownership on every read and write
+- Zod validation on all inputs; rate-limit auth and AI endpoints
+- Environment variables for all secrets; no secrets in the client bundle
+- Money math in integers, tested with unit tests (conversions, transfers, totals)
+- Database migrations and a seed script (demo user with 6 months of realistic data in USD and BDT)
+- Error boundaries, toast notifications, loading and empty states everywhere
+- Basic tests for the rules engine and currency logic
+- README with setup steps, env variable list, and deploy instructions
+
+---
+
+## 8. DELIVERY ORDER (build in these phases)
+
+**Phase 1: Foundation.** Project setup, auth, database schema, seed data, design system (glass cards, fiery background, layout shell).
+
+**Phase 2: Money core.** Accounts, categories, transactions, transfers with the real exchange rate, quick add, CSV import/export.
+
+**Phase 3: Dashboards.** Command Center with all widgets, the Transactions Kanban board, drag-and-drop, budgets, goals, subscriptions, currency toggle.
+
+**Phase 4: Intelligence and polish.** Rules engine, AI coach, Money Health Score, reports, settings, animations, responsive pass, tests, README.
+
+After each phase, confirm what works before moving on.
+
+---
+
+## 9. OUT OF SCOPE FOR V1
+
+Automatic bank syncing, mobile native apps, multi-user households, investment price tracking, and light mode. Keep the code structured so these can be added later.
