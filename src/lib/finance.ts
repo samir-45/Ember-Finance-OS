@@ -333,3 +333,235 @@ export function downloadFile(content: string, filename: string, type = 'text/csv
   link.click();
   URL.revokeObjectURL(url);
 }
+
+// ── Advanced Industry-Grade Financial Algorithms ──
+
+export interface BudgetPacing {
+  pacingPercentage: number;
+  projectedMonthEndMinor: number;
+  dailyAllowanceMinor: number;
+  daysRemaining: number;
+  status: 'under' | 'on_track' | 'warning' | 'exceeded';
+}
+
+/**
+ * Calculates linear budget pacing, end-of-month projection, and safe daily spend limit.
+ */
+export function computeBudgetPacing(spentMinor: number, limitMinor: number, date = new Date()): BudgetPacing {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const totalDays = new Date(year, month + 1, 0).getDate();
+  const currentDay = Math.min(date.getDate(), totalDays);
+  const daysRemaining = Math.max(1, totalDays - currentDay + 1);
+
+  // Expected linear spend percentage up to current day
+  const expectedSpendPct = (currentDay / totalDays) * 100;
+  const actualSpendPct = limitMinor > 0 ? (spentMinor / limitMinor) * 100 : 0;
+  const pacingPercentage = expectedSpendPct > 0 ? (actualSpendPct / expectedSpendPct) * 100 : 100;
+
+  // Run-rate projection
+  const dailyRunRate = currentDay > 0 ? spentMinor / currentDay : 0;
+  const projectedMonthEndMinor = Math.round(dailyRunRate * totalDays);
+
+  // Safe daily allowance to hit exact budget
+  const remainingBudget = Math.max(0, limitMinor - spentMinor);
+  const dailyAllowanceMinor = Math.round(remainingBudget / daysRemaining);
+
+  let status: BudgetPacing['status'] = 'on_track';
+  if (spentMinor >= limitMinor) {
+    status = 'exceeded';
+  } else if (pacingPercentage > 115) {
+    status = 'warning';
+  } else if (pacingPercentage < 85) {
+    status = 'under';
+  }
+
+  return {
+    pacingPercentage,
+    projectedMonthEndMinor,
+    dailyAllowanceMinor,
+    daysRemaining,
+    status,
+  };
+}
+
+export interface SinkingFundCalculation {
+  monthsRemaining: number;
+  monthlyDepositMinor: number;
+  projectedShortfallMinor: number;
+  isCompleted: boolean;
+  isBehind: boolean;
+}
+
+/**
+ * Computes amortized sinking fund requirements and deadline trajectory.
+ */
+export function computeSinkingFund(targetMinor: number, currentMinor: number, deadlineDateStr?: string | null): SinkingFundCalculation {
+  if (currentMinor >= targetMinor) {
+    return {
+      monthsRemaining: 0,
+      monthlyDepositMinor: 0,
+      projectedShortfallMinor: 0,
+      isCompleted: true,
+      isBehind: false,
+    };
+  }
+
+  if (!deadlineDateStr) {
+    return {
+      monthsRemaining: 12,
+      monthlyDepositMinor: Math.round((targetMinor - currentMinor) / 12),
+      projectedShortfallMinor: targetMinor - currentMinor,
+      isCompleted: false,
+      isBehind: false,
+    };
+  }
+
+  const now = new Date();
+  const deadline = new Date(deadlineDateStr);
+  const diffTime = deadline.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const monthsRemaining = Math.max(1, Math.ceil(diffDays / 30.4));
+
+  const remainingTarget = targetMinor - currentMinor;
+  const monthlyDepositMinor = Math.round(remainingTarget / monthsRemaining);
+
+  return {
+    monthsRemaining,
+    monthlyDepositMinor,
+    projectedShortfallMinor: remainingTarget,
+    isCompleted: false,
+    isBehind: diffDays < 0,
+  };
+}
+
+export interface SubscriptionMetrics {
+  mreUsdMinor: number; // Monthly Recurring Expense in USD
+  arrUsdMinor: number; // Annualized Recurring Cost
+  mreBdtMinor: number;
+  arrBdtMinor: number;
+  activeCount: number;
+  pausedCount: number;
+  subToIncomeRatio: number; // Percentage of monthly income
+}
+
+/**
+ * Normalizes mixed billing cycles into standardized MRR/ARR expense load.
+ */
+export function computeSubscriptionMetrics(
+  subscriptions: { amountMinor: number; currency: Currency; billingCycle: string; active: boolean }[],
+  monthlyIncomeUsdMinor: number,
+  rate = getConversionRate(),
+): SubscriptionMetrics {
+  let mreUsdMinor = 0;
+  let activeCount = 0;
+  let pausedCount = 0;
+
+  for (const s of subscriptions) {
+    if (!s.active) {
+      pausedCount++;
+      continue;
+    }
+    activeCount++;
+
+    const baseAmountUsd = convertToUsd(s.amountMinor, s.currency);
+    let monthlyUsd = baseAmountUsd;
+    if (s.billingCycle === 'yearly') monthlyUsd = Math.round(baseAmountUsd / 12);
+    else if (s.billingCycle === 'quarterly') monthlyUsd = Math.round(baseAmountUsd / 3);
+    else if (s.billingCycle === 'weekly') monthlyUsd = Math.round(baseAmountUsd * 4.33);
+
+    mreUsdMinor += monthlyUsd;
+  }
+
+  const arrUsdMinor = mreUsdMinor * 12;
+  const mreBdtMinor = Math.round(mreUsdMinor * rate);
+  const arrBdtMinor = Math.round(arrUsdMinor * rate);
+  const subToIncomeRatio = monthlyIncomeUsdMinor > 0 ? (mreUsdMinor / monthlyIncomeUsdMinor) * 100 : 0;
+
+  return {
+    mreUsdMinor,
+    arrUsdMinor,
+    mreBdtMinor,
+    arrBdtMinor,
+    activeCount,
+    pausedCount,
+    subToIncomeRatio,
+  };
+}
+
+export interface BucketAnalysis {
+  name: 'Needs' | 'Wants' | 'Savings';
+  targetPct: number;
+  actualPct: number;
+  amountUsdMinor: number;
+  amountBdtMinor: number;
+  status: 'optimal' | 'elevated' | 'underfunded';
+}
+
+/**
+ * Categorizes and calculates the classic 50/30/20 budget framework.
+ */
+export function compute503020Analysis(
+  monthTx: Transaction[],
+  categories: { id: string; name: string }[],
+  rate = getConversionRate(),
+): { needs: BucketAnalysis; wants: BucketAnalysis; savings: BucketAnalysis; totalIncomeUsdMinor: number } {
+  const needsNames = ['Groceries', 'Vegetables', 'Meat & Fish', 'Rent', 'Utilities', 'Health', 'Transport', 'Taxes & Fees'];
+  const wantsNames = ['Dining', 'Snacks', 'Shopping', 'Subscriptions', 'Education', 'Family', 'Other'];
+
+  const incomeTx = monthTx.filter(t => t.type === 'income' && t.status === 'done');
+  const expenseTx = monthTx.filter(t => t.type === 'expense' && t.status === 'done');
+
+  const totalIncomeUsdMinor = incomeTx.reduce((sum, t) => sum + convertToUsd(t.amountMinor, t.currency), 0);
+
+  let needsUsd = 0;
+  let wantsUsd = 0;
+
+  for (const t of expenseTx) {
+    const cat = categories.find(c => c.id === t.categoryId);
+    const catName = cat?.name || 'Other';
+    const usdAmt = convertToUsd(t.amountMinor, t.currency);
+
+    if (needsNames.includes(catName)) {
+      needsUsd += usdAmt;
+    } else {
+      wantsUsd += usdAmt;
+    }
+  }
+
+  const totalSpentUsd = needsUsd + wantsUsd;
+  const savingsUsd = Math.max(0, totalIncomeUsdMinor - totalSpentUsd);
+  const denominator = Math.max(totalIncomeUsdMinor, totalSpentUsd, 1);
+
+  const needsPct = (needsUsd / denominator) * 100;
+  const wantsPct = (wantsUsd / denominator) * 100;
+  const savingsPct = (savingsUsd / denominator) * 100;
+
+  return {
+    totalIncomeUsdMinor,
+    needs: {
+      name: 'Needs',
+      targetPct: 50,
+      actualPct: needsPct,
+      amountUsdMinor: needsUsd,
+      amountBdtMinor: Math.round(needsUsd * rate),
+      status: needsPct <= 50 ? 'optimal' : 'elevated',
+    },
+    wants: {
+      name: 'Wants',
+      targetPct: 30,
+      actualPct: wantsPct,
+      amountUsdMinor: wantsUsd,
+      amountBdtMinor: Math.round(wantsUsd * rate),
+      status: wantsPct <= 30 ? 'optimal' : 'elevated',
+    },
+    savings: {
+      name: 'Savings',
+      targetPct: 20,
+      actualPct: savingsPct,
+      amountUsdMinor: savingsUsd,
+      amountBdtMinor: Math.round(savingsUsd * rate),
+      status: savingsPct >= 20 ? 'optimal' : 'underfunded',
+    },
+  };
+}

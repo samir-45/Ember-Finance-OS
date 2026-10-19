@@ -18,6 +18,7 @@ import { SubscriptionsWidget } from '@/components/dashboard/SubscriptionsWidget'
 import { GoalsWidget } from '@/components/dashboard/GoalsWidget';
 import { RecentActivityWidget } from '@/components/dashboard/RecentActivityWidget';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
+import { PageGuide } from '@/components/ui/PageGuide';
 
 export default function DashboardPage() {
   const [currency, setCurrency] = useState<Currency>('BDT');
@@ -66,6 +67,35 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
+
+      {/* Dashboard Guide */}
+      <PageGuide
+        pageTitle="Dashboard"
+        tagline="Understand your consolidated financial position across foreign earnings and local spending."
+        steps={[
+          {
+            title: 'Review High-Level Metrics',
+            description: 'Check your consolidated Net Worth, current monthly Inflow, Outflow, and Runway months at a glance.',
+          },
+          {
+            title: 'Inspect Cash Flow Trajectory',
+            description: 'The 6-month area chart visualizes seasonal spikes, income volatility, and surplus patterns.',
+          },
+          {
+            title: 'Track Health Score & Breakdown',
+            description: 'The circular Money Health score dynamically scores savings rate, emergency reserve, and subscription overhead.',
+          },
+          {
+            title: 'Monitor Recurring & Targets',
+            description: 'Upcoming subscriptions and ongoing milestones are surfaced below with progress bars.',
+          },
+        ]}
+        concept={{
+          name: 'Runway Estimation',
+          explanation: 'Calculated as (Total Liquid Net Worth ÷ 3-Month Average Burn Rate). An emergency runway of 3 to 6 months provides resilience against income gaps.',
+        }}
+        proTip="Use the BDT / USD toggle in the top right to instantly flip the entire dashboard between domestic currency and international billing currency."
+      />
 
       {/* KPI Metric Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>

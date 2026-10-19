@@ -2,10 +2,14 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Search, Plus, Filter, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import {
+  Search, Plus, Filter, ArrowUpRight, ArrowDownLeft,
+  Trash2, Edit3, ArrowUpDown, Download, Check
+} from 'lucide-react';
 import { store } from '@/lib/store';
-import { formatMoney, dateLabel } from '@/lib/finance';
+import { formatMoney, dateLabel, convertToUsd, convertToBdt } from '@/lib/finance';
 import type { Transaction, Currency, Account, Category } from '@/types';
+import { PageGuide } from '@/components/ui/PageGuide';
 import { v4 as uuid } from 'uuid';
 
 function TransactionsContent() {
@@ -13,44 +17,62 @@ function TransactionsContent() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+
+  // Filters & Sorting
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all');
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [accountFilter, setAccountFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'>('date_desc');
+  const [pageSize, setPageSize] = useState<number>(25);
 
-  // New Transaction Form State
-  const [newMerchant, setNewMerchant] = useState('');
-  const [newAmount, setNewAmount] = useState('');
-  const [newCurrency, setNewCurrency] = useState<Currency>('BDT');
-  const [newType, setNewType] = useState<'income' | 'expense'>('expense');
-  const [newAccountId, setNewAccountId] = useState('');
-  const [newCategoryId, setNewCategoryId] = useState('');
-  const [newNote, setNewNote] = useState('');
+  // Modals
+  const [showModal, setShowModal] = useState(false);
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+
+  // Form State
+  const [merchant, setMerchant] = useState('');
+  const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState<Currency>('BDT');
+  const [type, setType] = useState<'income' | 'expense'>('expense');
+  const [accountId, setAccountId] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [note, setNote] = useState('');
+  const [date, setDate] = useState('');
 
   const refreshData = () => {
-    const txs = store.getTransactions().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const txs = store.getTransactions();
     setTransactions(txs);
     const cats = store.getCategories();
     setCategories(cats);
     const accs = store.getAccounts();
     setAccounts(accs);
-    if (accs.length > 0 && !newAccountId) {
-      setNewAccountId(accs[0].id);
-    }
-    if (cats.length > 0 && !newCategoryId) {
-      setNewCategoryId(cats[0].id);
-    }
+    if (accs.length > 0 && !accountId) setAccountId(accs[0].id);
+    if (cats.length > 0 && !categoryId) setCategoryId(cats[0].id);
   };
 
   useEffect(() => {
     refreshData();
     if (searchParams.get('quickAdd') === '1') {
-      setShowAddModal(true);
+      setEditingTx(null);
+      setMerchant('');
+      setAmount('');
+      setNote('');
+      setDate(new Date().toISOString().slice(0, 10));
+      setShowModal(true);
+    }
+    const catParam = searchParams.get('categoryId');
+    if (catParam) {
+      setCategoryFilter(catParam);
     }
   }, [searchParams]);
 
+  // Filtered & Sorted Transactions
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => {
+    let result = transactions.filter(t => {
       if (typeFilter !== 'all' && t.type !== typeFilter) return false;
+      if (accountFilter !== 'all' && t.accountId !== accountFilter) return false;
+      if (categoryFilter !== 'all' && t.categoryId !== categoryFilter) return false;
       if (search) {
         const q = search.toLowerCase();
         const matchesMerchant = t.merchant?.toLowerCase().includes(q);
@@ -61,36 +83,86 @@ function TransactionsContent() {
       }
       return true;
     });
-  }, [transactions, typeFilter, search, categories]);
 
-  const handleCreateTransaction = (e: React.FormEvent) => {
+    result.sort((a, b) => {
+      if (sortBy === 'date_desc') return new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (sortBy === 'date_asc') return new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (sortBy === 'amount_desc') return b.amountMinor - a.amountMinor;
+      if (sortBy === 'amount_asc') return a.amountMinor - b.amountMinor;
+      return 0;
+    });
+
+    return result;
+  }, [transactions, typeFilter, accountFilter, categoryFilter, search, sortBy, categories]);
+
+  // Aggregate Metrics for Filtered Selection
+  const filteredMetrics = useMemo(() => {
+    let incomeBdt = 0;
+    let expenseBdt = 0;
+    for (const t of filteredTransactions) {
+      const bdt = convertToBdt(t.amountMinor, t.currency);
+      if (t.type === 'income') incomeBdt += bdt;
+      else if (t.type === 'expense') expenseBdt += bdt;
+    }
+    return {
+      incomeBdt,
+      expenseBdt,
+      netBdt: incomeBdt - expenseBdt,
+      count: filteredTransactions.length,
+    };
+  }, [filteredTransactions]);
+
+  // Save Transaction
+  const handleSaveTransaction = (e: React.FormEvent) => {
     e.preventDefault();
-    const amountNum = parseFloat(newAmount);
+    const amountNum = parseFloat(amount);
     if (!amountNum || amountNum <= 0) return;
 
-    const newTx: Transaction = {
-      id: uuid(),
-      accountId: newAccountId,
-      categoryId: newCategoryId,
-      transferId: null,
-      type: newType,
-      amountMinor: Math.round(amountNum * 100),
-      currency: newCurrency,
-      note: newNote,
-      merchant: newMerchant,
-      date: new Date().toISOString().slice(0, 10),
-      tags: [],
-      paymentMethod: 'Manual Entry',
-      status: 'done',
-      createdAt: new Date().toISOString(),
-    };
+    if (editingTx) {
+      store.updateTransaction(editingTx.id, {
+        merchant,
+        type,
+        amountMinor: Math.round(amountNum * 100),
+        currency,
+        accountId,
+        categoryId,
+        note,
+        date: date || new Date().toISOString().slice(0, 10),
+      });
+      setEditingTx(null);
+    } else {
+      const newTx: Transaction = {
+        id: uuid(),
+        accountId,
+        categoryId,
+        transferId: null,
+        type,
+        amountMinor: Math.round(amountNum * 100),
+        currency,
+        note,
+        merchant,
+        date: date || new Date().toISOString().slice(0, 10),
+        tags: [],
+        paymentMethod: 'Manual Entry',
+        status: 'done',
+        createdAt: new Date().toISOString(),
+      };
+      store.createTransaction(newTx);
+    }
 
-    store.createTransaction(newTx);
     refreshData();
-    setShowAddModal(false);
-    setNewMerchant('');
-    setNewAmount('');
-    setNewNote('');
+    setShowModal(false);
+    setMerchant('');
+    setAmount('');
+    setNote('');
+  };
+
+  // Delete Transaction
+  const handleDeleteTransaction = (id: string) => {
+    if (confirm('Delete this transaction?')) {
+      store.deleteTransaction(id);
+      refreshData();
+    }
   };
 
   return (
@@ -99,11 +171,87 @@ function TransactionsContent() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Transactions Ledger</h1>
-          <p className="page-subtitle">Track every income, expense, and currency transfer with precision</p>
+          <p className="page-subtitle">Granular journal with multi-currency sorting, account filters, and running tallies</p>
         </div>
-        <button onClick={() => setShowAddModal(true)} className="btn btn-primary btn-sm">
-          <Plus size={16} /> Add Activity
+        <button
+          onClick={() => {
+            setEditingTx(null);
+            setMerchant('');
+            setAmount('');
+            setNote('');
+            setDate(new Date().toISOString().slice(0, 10));
+            setShowModal(true);
+          }}
+          className="btn btn-primary btn-sm"
+        >
+          <Plus size={15} /> Add Activity
         </button>
+      </div>
+
+      {/* Transactions Guide */}
+      <PageGuide
+        pageTitle="Transactions Ledger"
+        tagline="Search, filter, record, and audit your multi-currency income, living expenses, and transfers."
+        steps={[
+          {
+            title: 'Log New Income or Expense',
+            description: 'Click "+ Add Activity" (or press N on your keyboard) to record merchant, amount, currency, account, and category.',
+          },
+          {
+            title: 'Filter by Account & Category',
+            description: 'Use the dropdown filters to inspect spending for specific accounts (like bKash or Payoneer) or specific categories.',
+          },
+          {
+            title: 'Sort Ledger by Velocity',
+            description: 'Toggle sorting between Newest First, Oldest First, or Highest Amount to catch outlier expenses quickly.',
+          },
+          {
+            title: 'Edit or Delete Entries',
+            description: 'Click the pencil or trash icon on any row to modify amounts or notes; balances update automatically across the entire OS.',
+          },
+        ]}
+        concept={{
+          name: 'Running Selection Tallies',
+          explanation: 'The summary cards at the top dynamically calculate the exact Inflow, Outflow, and Net Cash for whatever search query or filter you have active.',
+        }}
+        proTip="Pressing the 'N' key from any page in the app instantly triggers the quick-add activity modal without touching your mouse."
+      />
+
+      {/* Running Ledger Tallies for Current Filter */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+        <div className="ember-glass" style={{ padding: '20px 24px' }}>
+          <span className="label-uppercase">Filtered Inflow</span>
+          <p className="text-money" style={{ marginTop: 4, color: 'var(--color-income)' }}>
+            +{formatMoney(filteredMetrics.incomeBdt, 'BDT')}
+          </p>
+        </div>
+
+        <div className="ember-glass" style={{ padding: '20px 24px' }}>
+          <span className="label-uppercase">Filtered Outflow</span>
+          <p className="text-money" style={{ marginTop: 4, color: 'var(--color-expense)' }}>
+            −{formatMoney(filteredMetrics.expenseBdt, 'BDT')}
+          </p>
+        </div>
+
+        <div className="ember-glass" style={{ padding: '20px 24px' }}>
+          <span className="label-uppercase">Net Retained Cash</span>
+          <p
+            className="text-money"
+            style={{
+              marginTop: 4,
+              color: filteredMetrics.netBdt >= 0 ? 'var(--color-income)' : 'var(--color-expense)',
+            }}
+          >
+            {filteredMetrics.netBdt >= 0 ? '+' : '−'}{formatMoney(Math.abs(filteredMetrics.netBdt), 'BDT')}
+          </p>
+        </div>
+
+        <div className="ember-glass" style={{ padding: '20px 24px' }}>
+          <span className="label-uppercase">Records Count</span>
+          <p className="text-money" style={{ marginTop: 4 }}>
+            {filteredMetrics.count}
+          </p>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -115,32 +263,74 @@ function TransactionsContent() {
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: 16,
+          gap: 14,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 260 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 220 }}>
           <Search size={18} style={{ color: 'var(--text-muted)' }} />
           <input
             type="text"
             placeholder="Search merchants, categories, or notes..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={e => setSearch(e.target.value)}
             className="input"
             style={{ border: 'none', background: 'transparent', padding: '6px 0' }}
           />
         </div>
 
-        <div className="tab-bar">
-          {(['all', 'income', 'expense'] as const).map(tab => (
-            <button
-              key={tab}
-              className={`tab-item ${typeFilter === tab ? 'active' : ''}`}
-              onClick={() => setTypeFilter(tab)}
-              style={{ textTransform: 'capitalize' }}
-            >
-              {tab}
-            </button>
-          ))}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Account Filter */}
+          <select
+            value={accountFilter}
+            onChange={e => setAccountFilter(e.target.value)}
+            className="input"
+            style={{ width: 'auto', padding: '6px 12px', fontSize: '0.8125rem' }}
+          >
+            <option value="all">All Accounts</option>
+            {accounts.map(a => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+
+          {/* Category Filter */}
+          <select
+            value={categoryFilter}
+            onChange={e => setCategoryFilter(e.target.value)}
+            className="input"
+            style={{ width: 'auto', padding: '6px 12px', fontSize: '0.8125rem' }}
+          >
+            <option value="all">All Categories</option>
+            {categories.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+
+          {/* Sort By */}
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as typeof sortBy)}
+            className="input"
+            style={{ width: 'auto', padding: '6px 12px', fontSize: '0.8125rem' }}
+          >
+            <option value="date_desc">Newest First</option>
+            <option value="date_asc">Oldest First</option>
+            <option value="amount_desc">Largest Amount</option>
+            <option value="amount_asc">Smallest Amount</option>
+          </select>
+
+          {/* Type Tab */}
+          <div className="tab-bar">
+            {(['all', 'income', 'expense'] as const).map(tab => (
+              <button
+                key={tab}
+                className={`tab-item ${typeFilter === tab ? 'active' : ''}`}
+                onClick={() => setTypeFilter(tab)}
+                style={{ textTransform: 'capitalize' }}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -156,17 +346,18 @@ function TransactionsContent() {
                 <th style={{ padding: '14px 20px', fontWeight: 500, color: 'var(--text-muted)' }}>Account</th>
                 <th style={{ padding: '14px 20px', fontWeight: 500, color: 'var(--text-muted)' }}>Status</th>
                 <th style={{ padding: '14px 20px', fontWeight: 500, color: 'var(--text-muted)', textAlign: 'right' }}>Amount</th>
+                <th style={{ padding: '14px 20px', fontWeight: 500, color: 'var(--text-muted)', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <td colSpan={7} style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
                     No transactions found matching your filter criteria.
                   </td>
                 </tr>
               ) : (
-                filteredTransactions.slice(0, 50).map((tx) => {
+                filteredTransactions.slice(0, pageSize).map(tx => {
                   const cat = categories.find(c => c.id === tx.categoryId);
                   const acc = accounts.find(a => a.id === tx.accountId);
                   const isIncome = tx.type === 'income';
@@ -234,8 +425,38 @@ function TransactionsContent() {
                         }}
                         className="ember-number"
                       >
-                        {isIncome ? '+' : '−'}
-                        {formatMoney(tx.amountMinor, tx.currency)}
+                        {isIncome ? '+' : '−'}{formatMoney(tx.amountMinor, tx.currency)}
+                      </td>
+                      <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                          <button
+                            onClick={() => {
+                              setEditingTx(tx);
+                              setMerchant(tx.merchant);
+                              setAmount((tx.amountMinor / 100).toString());
+                              setCurrency(tx.currency);
+                              setType(tx.type === 'income' ? 'income' : 'expense');
+                              setAccountId(tx.accountId);
+                              setCategoryId(tx.categoryId);
+                              setNote(tx.note);
+                              setDate(tx.date);
+                              setShowModal(true);
+                            }}
+                            className="btn btn-ghost btn-icon"
+                            style={{ padding: 4, width: 24, height: 24 }}
+                            title="Edit"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTransaction(tx.id)}
+                            className="btn btn-ghost btn-icon"
+                            style={{ color: 'var(--color-critical)', padding: 4, width: 24, height: 24 }}
+                            title="Delete"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -244,29 +465,43 @@ function TransactionsContent() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Slice Controller */}
+        {filteredTransactions.length > pageSize && (
+          <div style={{ padding: '16px 20px', textAlign: 'center', borderTop: '1px solid var(--border-subtle)' }}>
+            <button
+              onClick={() => setPageSize(prev => prev + 25)}
+              className="btn btn-secondary btn-sm"
+            >
+              Load More Records ({filteredTransactions.length - pageSize} remaining)
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Add Transaction Modal */}
-      {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ padding: '28px' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: 20 }}>Record New Activity</h2>
-            <form onSubmit={handleCreateTransaction} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Add / Edit Transaction Modal */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ padding: '28px' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: 20 }}>
+              {editingTx ? 'Edit Transaction' : 'Record Activity'}
+            </h2>
+            <form onSubmit={handleSaveTransaction} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
                 <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Type</label>
                 <div className="tab-bar">
                   <button
                     type="button"
-                    className={`tab-item ${newType === 'expense' ? 'active' : ''}`}
-                    onClick={() => setNewType('expense')}
+                    className={`tab-item ${type === 'expense' ? 'active' : ''}`}
+                    onClick={() => setType('expense')}
                     style={{ flex: 1 }}
                   >
                     Expense
                   </button>
                   <button
                     type="button"
-                    className={`tab-item ${newType === 'income' ? 'active' : ''}`}
-                    onClick={() => setNewType('income')}
+                    className={`tab-item ${type === 'income' ? 'active' : ''}`}
+                    onClick={() => setType('income')}
                     style={{ flex: 1 }}
                   >
                     Income
@@ -279,8 +514,8 @@ function TransactionsContent() {
                 <input
                   type="text"
                   placeholder="e.g. Upwork, Agora, Figma"
-                  value={newMerchant}
-                  onChange={(e) => setNewMerchant(e.target.value)}
+                  value={merchant}
+                  onChange={e => setMerchant(e.target.value)}
                   className="input"
                   required
                 />
@@ -293,8 +528,8 @@ function TransactionsContent() {
                     type="number"
                     step="0.01"
                     placeholder="0.00"
-                    value={newAmount}
-                    onChange={(e) => setNewAmount(e.target.value)}
+                    value={amount}
+                    onChange={e => setAmount(e.target.value)}
                     className="input"
                     required
                   />
@@ -302,12 +537,12 @@ function TransactionsContent() {
                 <div>
                   <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Currency</label>
                   <select
-                    value={newCurrency}
-                    onChange={(e) => setNewCurrency(e.target.value as Currency)}
+                    value={currency}
+                    onChange={e => setCurrency(e.target.value as Currency)}
                     className="input"
                   >
-                    <option value="BDT" style={{ background: '#111' }}>BDT</option>
-                    <option value="USD" style={{ background: '#111' }}>USD</option>
+                    <option value="BDT" style={{ background: '#111' }}>BDT (৳)</option>
+                    <option value="USD" style={{ background: '#111' }}>USD ($)</option>
                   </select>
                 </div>
               </div>
@@ -316,8 +551,8 @@ function TransactionsContent() {
                 <div>
                   <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Account</label>
                   <select
-                    value={newAccountId}
-                    onChange={(e) => setNewAccountId(e.target.value)}
+                    value={accountId}
+                    onChange={e => setAccountId(e.target.value)}
                     className="input"
                   >
                     {accounts.map(a => (
@@ -330,12 +565,12 @@ function TransactionsContent() {
                 <div>
                   <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Category</label>
                   <select
-                    value={newCategoryId}
-                    onChange={(e) => setNewCategoryId(e.target.value)}
+                    value={categoryId}
+                    onChange={e => setCategoryId(e.target.value)}
                     className="input"
                   >
                     {categories
-                      .filter(c => c.type === newType)
+                      .filter(c => c.type === type)
                       .map(c => (
                         <option key={c.id} value={c.id} style={{ background: '#111' }}>
                           {c.name}
@@ -346,22 +581,33 @@ function TransactionsContent() {
               </div>
 
               <div>
+                <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Date</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={e => setDate(e.target.value)}
+                  className="input"
+                  required
+                />
+              </div>
+
+              <div>
                 <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Note (Optional)</label>
                 <input
                   type="text"
                   placeholder="Additional details..."
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
+                  value={note}
+                  onChange={e => setNote(e.target.value)}
                   className="input"
                 />
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-                <button type="button" onClick={() => setShowAddModal(false)} className="btn btn-secondary">
+                <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  Save Activity
+                  {editingTx ? 'Update Activity' : 'Save Activity'}
                 </button>
               </div>
             </form>
