@@ -22,7 +22,7 @@ export function MetricCard({ label, value, hint, tone = "neutral" }: { label: st
   return <Card className="min-w-0">
     <CardContent className="p-5 sm:p-6">
       <p className="text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground">{label}</p>
-      <p className={`ember-number mt-4 truncate text-2xl font-light tracking-tight sm:text-3xl ${tone === "income" ? "text-emerald-300" : tone === "expense" ? "text-primary" : "text-foreground"}`} data-testid={`metric-${label.toLowerCase().replaceAll(" ", "-")}`}>{value}</p>
+      <p className={`ember-number mt-4 truncate text-2xl font-light tracking-tight sm:text-3xl ${tone === "income" ? "text-chart-2" : tone === "expense" ? "text-primary" : "text-foreground"}`} data-testid={`metric-${label.toLowerCase().replaceAll(" ", "-")}`}>{value}</p>
       {hint && <p className="mt-2 text-xs text-muted-foreground">{hint}</p>}
     </CardContent>
   </Card>;
@@ -63,17 +63,17 @@ export function EmptyState({ title, description, actionLabel, onAction }: { titl
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const classes = status === "done" ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300" : status === "pending" ? "border-primary/20 bg-primary/10 text-primary" : "border-border bg-muted text-muted-foreground";
+  const classes = status === "done" ? "border-chart-2/30 bg-chart-2/10 text-chart-2" : status === "pending" ? "border-primary/20 bg-primary/10 text-primary" : "border-border bg-muted text-muted-foreground";
   return <Badge variant="outline" className={classes}>{status}</Badge>;
 }
 
 export function MoneyDirection({ type }: { type: string }) {
   const income = type === "income";
-  return <span className={`inline-flex items-center gap-1 text-xs ${income ? "text-emerald-300" : "text-primary"}`}>{income ? <ArrowDownLeft className="size-3" /> : <ArrowUpRight className="size-3" />}{type}</span>;
+  return <span className={`inline-flex items-center gap-1 text-xs ${income ? "text-chart-2" : "text-primary"}`}>{income ? <ArrowDownLeft className="size-3" /> : <ArrowUpRight className="size-3" />}{type}</span>;
 }
 
 export function ProgressLine({ value, className = "" }: { value: number; className?: string }) {
-  return <Progress value={Math.min(100, Math.max(0, value))} className={`h-1.5 bg-white/10 [&>div]:bg-primary ${className}`} />;
+  return <Progress value={Math.min(100, Math.max(0, value))} className={`h-1.5 bg-muted [&>div]:bg-primary ${className}`} />;
 }
 
 export function QuickLink({ href, children, testId }: { href: string; children: ReactNode; testId: string }) {

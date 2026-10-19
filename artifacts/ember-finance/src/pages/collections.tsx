@@ -22,6 +22,14 @@ const initial = (kind: Kind): FormState => ({
   target: "", current: "0", deadline: "",
 });
 
+function calculatedRate(amountOut: string, amountIn: string) {
+  const sentMinor = toMinor(amountOut);
+  const receivedMinor = toMinor(amountIn);
+  return sentMinor > 0 && receivedMinor > 0
+    ? (receivedMinor / sentMinor).toFixed(6)
+    : "";
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="grid gap-2"><Label>{label}</Label>{children}</div>;
 }
@@ -45,6 +53,18 @@ export function AccountsPage() {
   };
   const saveTransfer = (e: React.FormEvent) => {
     e.preventDefault();
+    if (
+      !transfer.from ||
+      !transfer.to ||
+      transfer.from === transfer.to ||
+      toMinor(transfer.amountOut) <= 0 ||
+      toMinor(transfer.amountIn) <= 0 ||
+      !Number.isFinite(Number(transfer.rate)) ||
+      Number(transfer.rate) <= 0
+    ) {
+      toast({ title: "Check the transfer details", description: "Choose two different accounts, enter both amounts, and confirm the rate." });
+      return;
+    }
     actions.createTransfer.mutate({ data: { fromAccountId: transfer.from, toAccountId: transfer.to, amountOutMinor: toMinor(transfer.amountOut), amountInMinor: toMinor(transfer.amountIn), exchangeRate: Number(transfer.rate), feeMinor: toMinor(transfer.fee), feeCurrency: transfer.feeCurrency as "USD" | "BDT", date: transfer.date } }, { onSuccess: () => { setTransferOpen(false); toast({ title: "Transfer recorded", description: "Both sides of the exchange are now in your records." }); } });
   };
   if (data.accounts.isLoading || data.transfers.isLoading) return <><PageHeading title="Accounts" description="See your balances together, across currencies." /><LoadingBlocks /></>;
@@ -53,7 +73,7 @@ export function AccountsPage() {
     <PageHeading eyebrow="The places your money lives" title="Accounts" description="Bring your USD and BDT balances into one grounded view. Record the actual amount on both sides when you exchange." action={<><Button variant="outline" onClick={() => setTransferOpen(true)} disabled={accounts.length < 2} data-testid="button-record-transfer"><ArrowLeftRight />Record transfer</Button><Button onClick={() => openAccount()} data-testid="button-add-account"><Plus />Add account</Button></>} />
     {accounts.length === 0 ? <EmptyState title="Your accounts, all in one place" description="Add your bank, wallet, or cash balance to start seeing the full picture." actionLabel="Add an account" onAction={() => openAccount()} /> :
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{accounts.map((account) => <Card key={account.id} data-testid={`account-card-${account.id}`}><CardContent className="p-5">
-        <div className="mb-6 flex items-start justify-between"><div className="flex items-center gap-3"><div className="size-9 rounded-lg border border-white/10" style={{ backgroundColor: account.color || "hsl(var(--primary))" }} /><div><p className="font-medium">{account.name}</p><p className="mt-1 text-xs capitalize text-muted-foreground">{account.type} · {account.currency}</p></div></div><div className="flex gap-1"><Button variant="ghost" size="icon" aria-label="Edit account" onClick={() => openAccount(account)} data-testid={`button-edit-account-${account.id}`}><Pencil /></Button><Button variant="ghost" size="icon" aria-label="Delete account" onClick={() => actions.deleteAccount.mutate({ id: account.id }, { onSuccess: () => toast({ title: "Account removed" }), onError: () => toast({ title: "This account is still in use", description: "Move or remove related activity before deleting it." }) })} data-testid={`button-delete-account-${account.id}`}><Trash2 /></Button></div></div>
+        <div className="mb-6 flex items-start justify-between"><div className="flex items-center gap-3"><div className="size-9 rounded-lg border border-border/50" style={{ backgroundColor: account.color || "hsl(var(--primary))" }} /><div><p className="font-medium">{account.name}</p><p className="mt-1 text-xs capitalize text-muted-foreground">{account.type} · {account.currency}</p></div></div><div className="flex gap-1"><Button variant="ghost" size="icon" aria-label="Edit account" onClick={() => openAccount(account)} data-testid={`button-edit-account-${account.id}`}><Pencil /></Button><Button variant="ghost" size="icon" aria-label="Delete account" onClick={() => actions.deleteAccount.mutate({ id: account.id }, { onSuccess: () => toast({ title: "Account removed" }), onError: () => toast({ title: "This account is still in use", description: "Move or remove related activity before deleting it." }) })} data-testid={`button-delete-account-${account.id}`}><Trash2 /></Button></div></div>
         <p className="ember-number text-3xl font-light">{money(account.balanceMinor, account.currency)}</p><p className="mt-2 text-xs text-muted-foreground">Current balance</p>
       </CardContent></Card>)}</div>}
     <SectionCard title="Recent transfers" action={<span className="text-xs text-muted-foreground">{transfers.length} recorded</span>}>
@@ -71,8 +91,8 @@ export function AccountsPage() {
     <Dialog open={transferOpen} onOpenChange={setTransferOpen}><DialogContent><DialogHeader><DialogTitle>Record a currency transfer</DialogTitle><DialogDescription>Use the amounts that actually moved, not just a quoted rate.</DialogDescription></DialogHeader>
       <form onSubmit={saveTransfer} className="grid gap-4" data-testid="form-transfer">
         <div className="grid gap-3 sm:grid-cols-2"><Field label="From account"><Select value={transfer.from} onValueChange={(v) => setTransfer({ ...transfer, from: v, feeCurrency: accounts.find((a) => a.id === v)?.currency ?? "USD" })}><SelectTrigger data-testid="input-transfer-from"><SelectValue placeholder="Choose source" /></SelectTrigger><SelectContent>{accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} · {a.currency}</SelectItem>)}</SelectContent></Select></Field><Field label="To account"><Select value={transfer.to} onValueChange={(v) => setTransfer({ ...transfer, to: v })}><SelectTrigger data-testid="input-transfer-to"><SelectValue placeholder="Choose destination" /></SelectTrigger><SelectContent>{accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} · {a.currency}</SelectItem>)}</SelectContent></Select></Field></div>
-        <div className="grid gap-3 sm:grid-cols-2"><Field label="Amount sent"><Input required type="number" min="0.01" step="0.01" value={transfer.amountOut} onChange={(e) => setTransfer({ ...transfer, amountOut: e.target.value })} data-testid="input-transfer-out" /></Field><Field label="Amount received"><Input required type="number" min="0.01" step="0.01" value={transfer.amountIn} onChange={(e) => setTransfer({ ...transfer, amountIn: e.target.value })} data-testid="input-transfer-in" /></Field></div>
-        <div className="grid gap-3 sm:grid-cols-3"><Field label="Effective rate"><Input required type="number" min="0.000001" step="0.0001" value={transfer.rate} onChange={(e) => setTransfer({ ...transfer, rate: e.target.value })} placeholder="e.g. 117.5" data-testid="input-transfer-rate" /></Field><Field label="Fee"><Input type="number" min="0" step="0.01" value={transfer.fee} onChange={(e) => setTransfer({ ...transfer, fee: e.target.value })} data-testid="input-transfer-fee" /></Field><Field label="Fee currency"><Select value={transfer.feeCurrency} onValueChange={(v) => setTransfer({ ...transfer, feeCurrency: v })}><SelectTrigger data-testid="input-transfer-fee-currency"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="USD">USD</SelectItem><SelectItem value="BDT">BDT</SelectItem></SelectContent></Select></Field></div>
+        <div className="grid gap-3 sm:grid-cols-2"><Field label="Amount sent"><Input required type="number" min="0.01" step="0.01" value={transfer.amountOut} onChange={(e) => { const amountOut = e.target.value; setTransfer({ ...transfer, amountOut, rate: calculatedRate(amountOut, transfer.amountIn) }); }} data-testid="input-transfer-out" /></Field><Field label="Amount received"><Input required type="number" min="0.01" step="0.01" value={transfer.amountIn} onChange={(e) => { const amountIn = e.target.value; setTransfer({ ...transfer, amountIn, rate: calculatedRate(transfer.amountOut, amountIn) }); }} data-testid="input-transfer-in" /></Field></div>
+        <div className="grid gap-3 sm:grid-cols-3"><Field label="Effective rate · calculated"><Input required type="number" min="0.000001" step="0.000001" value={transfer.rate} onChange={(e) => setTransfer({ ...transfer, rate: e.target.value })} placeholder="Enter both amounts to calculate" data-testid="input-transfer-rate" /></Field><Field label="Fee"><Input type="number" min="0" step="0.01" value={transfer.fee} onChange={(e) => setTransfer({ ...transfer, fee: e.target.value })} data-testid="input-transfer-fee" /></Field><Field label="Fee currency"><Select value={transfer.feeCurrency} onValueChange={(v) => setTransfer({ ...transfer, feeCurrency: v })}><SelectTrigger data-testid="input-transfer-fee-currency"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="USD">USD</SelectItem><SelectItem value="BDT">BDT</SelectItem></SelectContent></Select></Field></div>
         <Field label="Date"><Input required type="date" value={transfer.date} onChange={(e) => setTransfer({ ...transfer, date: e.target.value })} data-testid="input-transfer-date" /></Field>
         <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={() => setTransferOpen(false)}>Cancel</Button><Button type="submit" disabled={actions.createTransfer.isPending} data-testid="button-save-transfer">Save transfer</Button></div>
       </form>

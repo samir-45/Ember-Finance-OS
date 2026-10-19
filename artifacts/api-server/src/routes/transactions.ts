@@ -7,11 +7,12 @@ import {
   ImportTransactionsBody,
   UpdateTransactionBody,
 } from "@workspace/api-zod";
-import { accounts, categories, db, transactions } from "@workspace/db";
+import { accounts, categories, db, transactions, transfers } from "@workspace/db";
 import { getFinanceUserId } from "../lib/auth";
-import { getTransactionList } from "../lib/finance-data";
+import { getTransactionList, type CurrencyCode } from "../lib/finance-data";
 import {
   csvDateIsValid,
+  dateToIso,
   parseCsv,
   parseMoneyMinor,
   quoteCsvCell,
@@ -72,6 +73,10 @@ router.get("/transactions", async (req, res) => {
     res.status(400).json({ error: "Unknown transaction type" });
     return;
   }
+  if ((from && !csvDateIsValid(from)) || (to && !csvDateIsValid(to))) {
+    res.status(400).json({ error: "Date filters must use YYYY-MM-DD" });
+    return;
+  }
   const all = await getTransactionList(userId);
   const filtered = all.filter((transaction) => {
     if (status && transaction.status !== status) return false;
@@ -128,7 +133,7 @@ router.post("/transactions", async (req, res) => {
       currency: body.currency,
       note: body.note ?? null,
       merchant: body.merchant ?? null,
-      date: body.date,
+      date: dateToIso(body.date),
       tags: body.tags ?? [],
       paymentMethod: body.paymentMethod ?? "Other",
       status: body.status,
@@ -149,35 +154,64 @@ router.patch("/transactions/bulk", async (req, res) => {
     return;
   }
   const owned = await db
-    .select({ id: transactions.id, type: transactions.type })
+    .select({
+      id: transactions.id,
+      type: transactions.type,
+      transferId: transactions.transferId,
+    })
     .from(transactions)
     .where(and(eq(transactions.userId, userId), inArray(transactions.id, body.ids)));
   if (owned.length !== body.ids.length) {
     res.status(404).json({ error: "One or more transactions were not found" });
     return;
   }
-  if (owned.some((item) => item.type === "transfer")) {
+  const linkedTransfers = [
+    ...new Set(owned.flatMap((item) => (item.transferId ? [item.transferId] : []))),
+  ];
+  const hasUnlinkedTransfer = owned.some(
+    (item) => item.type === "transfer" && !item.transferId,
+  );
+  if (hasUnlinkedTransfer || (linkedTransfers.length > 0 && body.categoryId !== undefined)) {
     res.status(400).json({ error: "Transfer rows cannot be bulk edited" });
     return;
   }
-  if (body.categoryId && !(await categoryIsValid(userId, body.categoryId, "expense"))) {
+  if (body.categoryId) {
     const [category] = await db
-      .select({ type: categories.type })
+      .select({ id: categories.id, type: categories.type })
       .from(categories)
       .where(and(eq(categories.id, body.categoryId), eq(categories.userId, userId)))
       .limit(1);
-    if (!category) {
-      res.status(400).json({ error: "Category not found" });
+    const transactionTypes = new Set(owned.map((item) => item.type));
+    if (!category || [...transactionTypes].some((item) => item !== category.type)) {
+      res.status(400).json({ error: "Category must match every selected transaction" });
       return;
     }
   }
-  await db
-    .update(transactions)
-    .set({
-      ...(body.status !== undefined ? { status: body.status } : {}),
-      ...(body.categoryId !== undefined ? { categoryId: body.categoryId } : {}),
-    })
-    .where(and(eq(transactions.userId, userId), inArray(transactions.id, body.ids)));
+  const regularIds = owned
+    .filter((item) => !item.transferId)
+    .map((item) => item.id);
+  if (regularIds.length) {
+    await db
+      .update(transactions)
+      .set({
+        ...(body.status !== undefined ? { status: body.status } : {}),
+        ...(body.categoryId !== undefined ? { categoryId: body.categoryId } : {}),
+      })
+      .where(and(eq(transactions.userId, userId), inArray(transactions.id, regularIds)));
+  }
+  if (body.status !== undefined) {
+    for (const transferId of linkedTransfers) {
+      await db
+        .update(transactions)
+        .set({ status: body.status })
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            eq(transactions.transferId, transferId),
+          ),
+        );
+    }
+  }
   const idSet = new Set(body.ids);
   res.json((await getTransactionList(userId)).filter((item) => idSet.has(item.id)));
 });
@@ -193,6 +227,27 @@ router.patch("/transactions/:id", async (req, res) => {
     .limit(1);
   if (!existing) {
     res.status(404).json({ error: "Transaction not found" });
+    return;
+  }
+  if (existing.transferId) {
+    const otherFields = Object.keys(body).filter((field) => field !== "status");
+    if (body.status === undefined || otherFields.length > 0) {
+      res.status(400).json({ error: "Edit a transfer's status for both sides together" });
+      return;
+    }
+    await db
+      .update(transactions)
+      .set({ status: body.status })
+      .where(
+        and(
+          eq(transactions.userId, userId),
+          eq(transactions.transferId, existing.transferId),
+        ),
+      );
+    const response = (await getTransactionList(userId)).find(
+      (item) => item.id === existing.id,
+    );
+    res.json(response);
     return;
   }
   if (existing.type === "transfer" || body.type === "transfer") {
@@ -221,7 +276,7 @@ router.patch("/transactions/:id", async (req, res) => {
       ...(body.currency !== undefined ? { currency: body.currency } : {}),
       ...(body.note !== undefined ? { note: body.note } : {}),
       ...(body.merchant !== undefined ? { merchant: body.merchant } : {}),
-      ...(body.date !== undefined ? { date: body.date } : {}),
+      ...(body.date !== undefined ? { date: dateToIso(body.date) } : {}),
       ...(body.tags !== undefined ? { tags: body.tags } : {}),
       ...(body.paymentMethod !== undefined ? { paymentMethod: body.paymentMethod } : {}),
       ...(body.status !== undefined ? { status: body.status } : {}),
@@ -246,7 +301,15 @@ router.delete("/transactions/:id", async (req, res) => {
     return;
   }
   if (transaction.transferId) {
-    res.status(409).json({ error: "Remove this row from the transfer history" });
+    await db
+      .delete(transfers)
+      .where(
+        and(
+          eq(transfers.id, transaction.transferId),
+          eq(transfers.userId, userId),
+        ),
+      );
+    res.status(204).send();
     return;
   }
   await db
@@ -288,10 +351,12 @@ router.post("/transactions/import", async (req, res) => {
     amountMinor: number;
     currency: string;
     type: string;
+    accountId: string;
     merchant?: string | null;
     note?: string | null;
   }) =>
     [
+      row.accountId,
       row.date,
       row.amountMinor,
       row.currency,
@@ -299,7 +364,7 @@ router.post("/transactions/import", async (req, res) => {
       row.merchant?.trim().toLowerCase() ?? "",
       row.note?.trim().toLowerCase() ?? "",
     ].join("|");
-  const seen = new Set(oldRows.map(fingerprint));
+  const seen = new Set(oldRows.map((row) => fingerprint({ ...row, accountId: row.accountId })));
   const categoryMap = new Map(
     categoryRows.map((category) => [
       `${category.type}:${category.name.toLowerCase()}`,
@@ -348,6 +413,7 @@ router.post("/transactions/import", async (req, res) => {
       .map((tag) => tag.trim())
       .filter(Boolean);
     const candidate = {
+      accountId: account.id,
       date,
       amountMinor: Number(amountMinor),
       currency,
@@ -374,7 +440,7 @@ router.post("/transactions/import", async (req, res) => {
       date,
       tags,
       paymentMethod: cell("paymentmethod") || "Other",
-      status: statusValue,
+      status: statusValue as "planned" | "pending" | "done",
     });
   }
   if (inserts.length) await db.insert(transactions).values(inserts);

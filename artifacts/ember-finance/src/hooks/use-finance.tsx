@@ -67,7 +67,7 @@ export function useFinanceData(month = new Date().toISOString().slice(0, 7), yea
   const yearlyReport = useGetYearlyReport({ year });
   const health = useGetHealth();
   const exportTransactions = useExportTransactions({ query: { enabled: false, queryKey: ["/api/transactions/export"] } });
-  const exportUserData = useExportUserData({ query: { enabled: false, queryKey: ["/api/data/export"] } });
+  const exportUserData = useExportUserData({ query: { enabled: false, queryKey: ["/api/settings/export"] } });
   return { dashboard, transactions, accounts, categories, transfers, subscriptions, budgets, goals, settings, insights, monthlyReport, yearlyReport, health, exportTransactions, exportUserData };
 }
 

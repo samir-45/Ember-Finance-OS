@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "wouter";
 import type { Transaction, TransactionStatus, TransactionType } from "@workspace/api-client-react";
 import { getListTransactionsQueryKey, useListTransactions } from "@workspace/api-client-react";
 import { Button } from "@workspace/ember-design-system/components/ui/button";
@@ -18,7 +17,6 @@ type Draft = { accountId: string; categoryId: string; type: TransactionType; amo
 const blankDraft = (): Draft => ({ accountId: "", categoryId: "", type: "expense", amount: "", currency: "USD", date: new Date().toISOString().slice(0, 10), note: "", merchant: "", tags: "", paymentMethod: "Bank transfer", status: "done" });
 
 export default function TransactionsPage() {
-  const [, setLocation] = useLocation();
   const { accounts, categories, exportTransactions } = useFinanceData();
   const actions = useFinanceActions();
   const [search, setSearch] = useState("");
@@ -52,14 +50,42 @@ export default function TransactionsPage() {
   const rows = transactionsQuery.data ?? [];
 
   useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if ((event.key === "n" || event.key === "N") && !event.metaKey && !event.ctrlKey && !["INPUT", "TEXTAREA"].includes((event.target as HTMLElement)?.tagName)) {
-        event.preventDefault(); openNew();
+    const openQuickAdd = () => openNew();
+    const handleShortcut = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        (event.key === "n" || event.key === "N") &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !target?.isContentEditable &&
+        !["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")
+      ) {
+        event.preventDefault();
+        openNew();
       }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  });
+    window.addEventListener("ember:open-quick-add", openQuickAdd);
+    window.addEventListener("keydown", handleShortcut);
+    return () => {
+      window.removeEventListener("ember:open-quick-add", openQuickAdd);
+      window.removeEventListener("keydown", handleShortcut);
+    };
+  }, [accounts.data]);
+
+  useEffect(() => {
+    if (accounts.isLoading) return;
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get("quickAdd") !== "1") return;
+    openNew();
+    searchParams.delete("quickAdd");
+    const query = searchParams.toString();
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}`,
+    );
+  }, [accounts.data, accounts.isLoading]);
   function openNew() {
     setEditing(null);
     setDraft({ ...blankDraft(), accountId: accounts.data?.[0]?.id ?? "", currency: accounts.data?.[0]?.currency ?? "USD" });
@@ -108,7 +134,7 @@ export default function TransactionsPage() {
         <Button variant="outline" onClick={() => fileRef.current?.click()} data-testid="button-import-csv"><FileUp />Import</Button>
         <input ref={fileRef} type="file" accept=".csv,text/csv" className="sr-only" aria-label="Choose transaction CSV" data-testid="input-import-csv" onChange={(e) => void importCsv(e.target.files?.[0])} />
         <Button variant="outline" onClick={() => void exportCsv()} disabled={exportTransactions.isFetching} data-testid="button-export-csv"><ArrowDownToLine />Export CSV</Button>
-        <Button onClick={openNew} data-testid="button-add-transaction"><Plus />Add activity <kbd className="ml-1 rounded border border-white/20 px-1 text-[10px]">N</kbd></Button>
+        <Button onClick={openNew} data-testid="button-add-transaction"><Plus />Add activity <kbd className="ml-1 rounded border border-primary-foreground/30 px-1 text-[10px]">N</kbd></Button>
       </div>
     } />
 
@@ -121,7 +147,7 @@ export default function TransactionsPage() {
         <Select value={accountId || "all"} onValueChange={(v) => setAccountId(v === "all" ? "" : v)}><SelectTrigger className="w-36" aria-label="Filter by account" data-testid="filter-account"><SelectValue placeholder="Account" /></SelectTrigger><SelectContent><SelectItem value="all">All accounts</SelectItem>{accounts.data?.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select>
       </div>
     </div>
-    <details className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+    <details className="rounded-xl border border-border/50 bg-card/40 p-4">
       <summary className="cursor-pointer text-sm text-muted-foreground" data-testid="summary-more-filters">More filters · date, tag and payment method</summary>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <Input type="date" aria-label="From date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} data-testid="filter-from-date" />
@@ -130,7 +156,7 @@ export default function TransactionsPage() {
         <Input placeholder="Payment method" aria-label="Filter by payment method" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} data-testid="filter-payment-method" />
       </div>
     </details>
-    <div className="flex flex-col gap-3 rounded-xl border border-white/5 bg-white/[0.025] p-4 sm:flex-row">
+    <div className="flex flex-col gap-3 rounded-xl border border-border/50 bg-card/50 p-4 sm:flex-row">
       <div className="flex flex-1 items-center gap-3"><Sparkles className="size-4 shrink-0 text-primary" /><Input value={quickText} onChange={(e) => setQuickText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") parseText(); }} placeholder="Try “$1,200 from client work today”" aria-label="Describe a transaction in plain language" data-testid="input-quick-parse" /></div>
       <Button variant="secondary" onClick={parseText} disabled={actions.parseQuickEntry.isPending} data-testid="button-parse-quick-entry">{actions.parseQuickEntry.isPending ? "Making sense…" : "Draft with Ember"}</Button>
     </div>
@@ -140,16 +166,16 @@ export default function TransactionsPage() {
       <div className="grid gap-4 xl:grid-cols-3">
         {(["planned", "pending", "done"] as const).map((lane) => {
           const laneRows = rows.filter((tx) => tx.status === lane);
-          return <section key={lane} className="rounded-xl border border-white/5 bg-white/[0.015] p-3" onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, lane)} data-testid={`lane-${lane}`}>
+          return <section key={lane} className="rounded-xl border border-border/50 bg-card/40 p-3" onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, lane)} data-testid={`lane-${lane}`}>
             <div className="mb-3 flex items-center justify-between px-1"><h2 className="text-sm font-medium capitalize">{lane}</h2><span className="text-xs text-muted-foreground">{laneRows.length}</span></div>
-            <div className="space-y-2">{laneRows.map((tx) => <article key={tx.id} draggable onDragStart={(e) => e.dataTransfer.setData("text/plain", tx.id)} className="group rounded-lg border border-white/5 bg-white/[0.035] p-3 transition hover:border-white/10" data-testid={`transaction-row-${tx.id}`}>
+            <div className="space-y-2">{laneRows.map((tx) => <article key={tx.id} draggable onDragStart={(e) => e.dataTransfer.setData("text/plain", tx.id)} className="group rounded-lg border border-border/50 bg-card/70 p-3 transition hover:border-border" data-testid={`transaction-row-${tx.id}`}>
               <div className="flex items-start gap-2"><input type="checkbox" className="mt-1 accent-primary" aria-label={`Select ${tx.merchant || tx.note || "transaction"}`} checked={selected.includes(tx.id)} onChange={(e) => setSelected((old) => e.target.checked ? [...old, tx.id] : old.filter((id) => id !== tx.id))} data-testid={`checkbox-transaction-${tx.id}`} />
                 <button type="button" className="min-w-0 flex-1 text-left" onClick={() => editRow(tx)} data-testid={`button-edit-transaction-${tx.id}`}><p className="truncate text-sm font-medium">{tx.merchant || tx.note || tx.categoryName || "Transaction"}</p><p className="mt-1 truncate text-xs text-muted-foreground">{tx.categoryName || tx.accountName} · {tx.paymentMethod}</p></button>
-                <p className={`ember-number text-sm ${tx.type === "income" ? "text-emerald-300" : "text-foreground"}`}>{tx.type === "income" ? "+" : "−"}{money(tx.amountMinor, tx.currency)}</p>
+                <p className={`ember-number text-sm ${tx.type === "income" ? "text-chart-2" : "text-foreground"}`}>{tx.type === "income" ? "+" : "−"}{money(tx.amountMinor, tx.currency)}</p>
               </div>
               <div className="mt-3 flex items-center justify-between gap-2 pl-6"><div className="flex items-center gap-2"><StatusBadge status={tx.status} /><span className="text-[11px] text-muted-foreground">{dateLabel(tx.date)}</span></div><div className="flex gap-1"><Select value={tx.status} onValueChange={(v) => updateStatus(tx.id, v as TransactionStatus)}><SelectTrigger className="h-7 w-28 text-[11px]" aria-label={`Change status of ${tx.merchant || tx.note || "transaction"}`} data-testid={`select-status-${tx.id}`}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="planned">Planned</SelectItem><SelectItem value="pending">Pending</SelectItem><SelectItem value="done">Done</SelectItem></SelectContent></Select><Button variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-primary" aria-label="Delete transaction" onClick={() => actions.deleteTransaction.mutate({ id: tx.id }, { onSuccess: () => toast({ title: "Activity deleted" }) })} data-testid={`button-delete-transaction-${tx.id}`}><Trash2 className="size-3.5" /></Button></div></div>
             </article>)}
-              {laneRows.length === 0 && <div className="rounded-lg border border-dashed border-white/10 px-3 py-6 text-center text-xs text-muted-foreground">Drop an activity here to mark it {lane}.</div>}
+              {laneRows.length === 0 && <div className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">Drop an activity here to mark it {lane}.</div>}
             </div>
           </section>;
         })}

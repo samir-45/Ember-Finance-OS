@@ -1,0 +1,1 @@
+- [Headers iterable typing](headers-iterable.md) — generated API clients that iterate `Headers` need the TypeScript DOM iterable library enabled.

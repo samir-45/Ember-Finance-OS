@@ -48,7 +48,7 @@ export default function SettingsPage() {
   };
   const confirmDelete = () => {
     if (deleteText !== "DELETE") return;
-    actions.deleteUserData.mutate({ data: { confirm: "DELETE" } }, { onSuccess: () => { toast({ title: "Your data was deleted", description: "You’ll be signed out of your personal finance workspace." }); setDeleteOpen(false); setDeleteText(""); } });
+    actions.deleteUserData.mutate({ data: { confirm: "DELETE" } }, { onSuccess: () => { toast({ title: "Your data was deleted", description: "Your finance records and settings have been cleared." }); setDeleteOpen(false); setDeleteText(""); } });
   };
   return <div className="space-y-6">
     <PageHeading eyebrow="Private by design" title="Settings" description="The currencies you think in, the privacy you choose, and your complete data." />
@@ -67,7 +67,6 @@ export default function SettingsPage() {
     </SectionCard>
     <SectionCard title="Your categories" action={<Button size="sm" onClick={() => openCategory()} data-testid="button-add-category"><Plus />Add category</Button>}>
       {categories.length === 0 ? <EmptyState title="Create your own language" description="Use categories that reflect how you work and live, from client projects to everyday costs." actionLabel="Add a category" onAction={() => openCategory()} /> :
-        <div className="grid gap-2 sm:grid-cols-2">{categories.map((category) => <div key={category.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.025] p-3" data-testid={`category-row-${category.id}`}><div className="flex min-w-0 items-center gap-3"><span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: category.color }} /><div><p className="text-sm">{category.name}</p><p className="mt-0.5 text-xs capitalize text-muted-foreground">{category.type}</p></div></div><div className="flex gap-1"><Button variant="ghost" size="sm" onClick={() => openCategory(category)} data-testid={`button-edit-category-${category.id}`}>Edit</Button><Button variant="ghost" size="icon" aria-label={`Delete ${category.name}`} onClick={() => actions.deleteCategory.mutate({ id: category.id }, { onSuccess: () => toast({ title: "Category removed" }), onError: () => toast({ title: "Category is still in use", description: "Reassign its transactions or budgets before deleting." }) })} data-testid={`button-delete-category-${category.id}`}><Trash2 /></Button></div></div>)}</div>}
     </SectionCard>
     <SectionCard title="Export your data" action={<Download className="size-4 text-muted-foreground" />}>
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><p className="text-sm">A complete copy, in a portable format</p><p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">Download your settings, accounts, categories, transactions, transfers, subscriptions, budgets and goals as JSON. The export comes directly from your account.</p></div><Button variant="outline" onClick={() => void downloadJson()} disabled={data.exportUserData.isFetching} data-testid="button-export-json"><Download />{data.exportUserData.isFetching ? "Preparing…" : "Download JSON"}</Button></div>

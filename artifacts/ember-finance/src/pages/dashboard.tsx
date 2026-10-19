@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@workspace/ember-design-system/components/ui/button";
 import { Card, CardContent } from "@workspace/ember-design-system/components/ui/card";
@@ -12,15 +12,19 @@ export default function DashboardPage() {
   const [, setLocation] = useLocation();
   const [currency, setCurrency] = useState<"USD" | "BDT">("USD");
   const dashboard = query.data;
+  useEffect(() => {
+    if (dashboard?.selectedCurrency === "USD" || dashboard?.selectedCurrency === "BDT") {
+      setCurrency(dashboard.selectedCurrency);
+    }
+  }, [dashboard?.selectedCurrency]);
   if (query.isLoading) return <><PageHeading title="Good to see you" description="Your personal finance space is getting ready." /><LoadingBlocks /></>;
   if (query.isError || !dashboard) return <QueryError retry={() => void query.refetch()} />;
   const value = (pair: typeof dashboard.netWorth) => paired(pair, currency);
   const chartMax = Math.max(1, ...dashboard.cashFlow.map((p) => Math.max(p.income[currency === "USD" ? "usdMinor" : "bdtMinor"], p.expenses[currency === "USD" ? "usdMinor" : "bdtMinor"])));
-  const selected = dashboard.selectedCurrency === "original" ? currency : dashboard.selectedCurrency;
   return <div className="space-y-6">
     <PageHeading eyebrow={new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(`${dashboard.selectedMonth}-01`))} title="Your money, in focus" description="A calm overview of what came in, what went out, and what you’re building." action={
-      <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 p-1" aria-label="Display currency">
-        {(["USD", "BDT"] as const).map((unit) => <Button key={unit} variant={selected === unit ? "secondary" : "ghost"} size="sm" onClick={() => setCurrency(unit)} data-testid={`button-currency-${unit.toLowerCase()}`}>{unit}</Button>)}
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted p-1" aria-label="Display currency">
+        {(["USD", "BDT"] as const).map((unit) => <Button key={unit} variant={currency === unit ? "secondary" : "ghost"} size="sm" onClick={() => setCurrency(unit)} data-testid={`button-currency-${unit.toLowerCase()}`}>{unit}</Button>)}
       </div>
     } />
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -41,18 +45,18 @@ export default function DashboardPage() {
               const month = new Date(`${point.month}-01`).toLocaleDateString("en", { month: "short" });
               return <div key={point.month} className="flex h-full flex-1 flex-col justify-end gap-2">
                 <div className="flex h-[82%] items-end justify-center gap-1.5">
-                  <div className="w-3 rounded-t-sm bg-emerald-400/80 transition-all sm:w-5" style={{ height: `${Math.max(3, income / chartMax * 100)}%` }} title={`${month} income ${money(income, currency)}`} />
+                  <div className="w-3 rounded-t-sm bg-chart-2 transition-all sm:w-5" style={{ height: `${Math.max(3, income / chartMax * 100)}%` }} title={`${month} income ${money(income, currency)}`} />
                   <div className="w-3 rounded-t-sm bg-primary/80 transition-all sm:w-5" style={{ height: `${Math.max(3, expense / chartMax * 100)}%` }} title={`${month} spending ${money(expense, currency)}`} />
                 </div><span className="text-center text-[11px] text-muted-foreground">{month}</span>
               </div>;
             })}
           </div>
-          <div className="flex gap-5 border-t border-white/5 pt-3 text-xs text-muted-foreground"><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-emerald-400" />Income</span><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-primary" />Expenses</span></div>
+          <div className="flex gap-5 border-t border-border/50 pt-3 text-xs text-muted-foreground"><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-chart-2" />Income</span><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-primary" />Expenses</span></div>
         </div>}
       </SectionCard>
       <SectionCard title="A note from Ember" action={<Sparkles className="size-4 text-primary" />}>
         {dashboard.coachInsights.length === 0 ? <EmptyState title="Space to reflect" description="Your patterns and useful nudges will find a home here." actionLabel="Visit your coach" onAction={() => setLocation("/coach")} /> :
-          <div className="space-y-3">{dashboard.coachInsights.slice(0, 3).map((insight) => <div key={insight.id} className="rounded-lg border border-white/5 bg-white/[0.025] p-4" data-testid={`insight-${insight.id}`}>
+          <div className="space-y-3">{dashboard.coachInsights.slice(0, 3).map((insight) => <div key={insight.id} className="rounded-lg border border-border/50 bg-card/50 p-4" data-testid={`insight-${insight.id}`}>
             <div className="mb-2 flex items-center justify-between gap-2"><span className="text-xs uppercase tracking-wider text-primary">{insight.kind}</span><span className="text-[11px] text-muted-foreground">{dateLabel(insight.createdAt)}</span></div>
             <p className="text-sm font-medium">{insight.title}</p><p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{insight.body}</p>
           </div>)}
@@ -73,7 +77,7 @@ export default function DashboardPage() {
         {dashboard.recentTransactions.length === 0 ? <EmptyState title="A fresh start" description="Your latest income and spending will show here." actionLabel="Add activity" onAction={() => setLocation("/transactions")} /> :
           <div className="divide-y divide-white/5">{dashboard.recentTransactions.slice(0, 6).map((tx) => <div key={tx.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0" data-testid={`transaction-${tx.id}`}>
             <div className="min-w-0"><div className="truncate text-sm font-medium">{tx.merchant || tx.note || tx.categoryName || "Transaction"}</div><div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground"><span>{tx.categoryName || tx.accountName}</span><span>·</span><span>{dateLabel(tx.date)}</span><StatusBadge status={tx.status} /></div></div>
-            <div className={`ember-number whitespace-nowrap text-sm ${tx.type === "income" ? "text-emerald-300" : "text-foreground"}`}>{tx.type === "income" ? "+" : "−"}{money(tx.amountMinor, tx.currency)}</div>
+            <div className={`ember-number whitespace-nowrap text-sm ${tx.type === "income" ? "text-chart-2" : "text-foreground"}`}>{tx.type === "income" ? "+" : "−"}{money(tx.amountMinor, tx.currency)}</div>
           </div>)}</div>}
       </SectionCard>
     </div>

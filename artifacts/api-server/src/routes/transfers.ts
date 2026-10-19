@@ -12,7 +12,7 @@ import {
 } from "@workspace/db";
 import { getFinanceUserId } from "../lib/auth";
 import { getTransferList } from "../lib/finance-data";
-import { validate } from "./finance-utils";
+import { dateToIso, validate } from "./finance-utils";
 
 const router = Router();
 
@@ -80,7 +80,7 @@ router.post("/transfers", async (req, res) => {
       exchangeRate: body.exchangeRate.toFixed(6),
       feeMinor: body.feeMinor ?? 0,
       feeCurrency,
-      date: body.date,
+      date: dateToIso(body.date),
     });
     await tx.insert(transactions).values([
       {
@@ -94,7 +94,7 @@ router.post("/transfers", async (req, res) => {
         currency: from.currency,
         note: `Transfer to ${to.name}`,
         merchant: "Internal transfer",
-        date: body.date,
+        date: dateToIso(body.date),
         tags: ["transfer"],
         paymentMethod: "Transfer",
         status: "done",
@@ -110,7 +110,7 @@ router.post("/transfers", async (req, res) => {
         currency: to.currency,
         note: `Transfer from ${from.name}`,
         merchant: "Internal transfer",
-        date: body.date,
+        date: dateToIso(body.date),
         tags: ["transfer"],
         paymentMethod: "Transfer",
         status: "done",
@@ -122,13 +122,13 @@ router.post("/transfers", async (req, res) => {
               userId,
               accountId: feeAccount.id,
               categoryId: feeCategory?.id ?? null,
-              transferId: null,
+              transferId,
               type: "expense" as const,
               amountMinor: body.feeMinor,
               currency: feeCurrency,
               note: "Transfer fee",
               merchant: "Transfer provider",
-              date: body.date,
+              date: dateToIso(body.date),
               tags: ["fee", "transfer"],
               paymentMethod: "Transfer",
               status: "done" as const,
