@@ -6,10 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
     "date-fns": "^4.4.0",
+    "drizzle-orm": "^0.45.4",
     "framer-motion": "^14.3.0",
     "lucide-react": "^1.59.0",
     "next": "^16.4.2",
@@ -23,6 +28,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/uuid": "^10.0.0",
+    "drizzle-kit": "^0.31.11",
     "typescript": "^5.7.0"
   }
 }
