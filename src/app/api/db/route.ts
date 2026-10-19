@@ -39,18 +39,46 @@ export async function GET() {
           db.select().from(schema.exchangeRates),
         ]);
 
+        const mappedAccounts = allAccounts.map(a => ({
+          id: a.id,
+          name: a.name,
+          type: a.type,
+          currency: a.currency,
+          openingBalanceMinor: (a as any).openingBalanceMinor ?? (a as any).initialBalanceMinor ?? 0,
+          color: a.color || '#ff6a2b',
+          createdAt: a.createdAt instanceof Date ? a.createdAt.toISOString() : String(a.createdAt || new Date().toISOString()),
+        }));
+
+        const mappedTransfers = allTransfers.map(tr => ({
+          ...tr,
+          exchangeRate: Number(tr.exchangeRate) || 121.5,
+          fromAmountMinor: Number(tr.fromAmountMinor) || 0,
+          toAmountMinor: Number(tr.toAmountMinor) || 0,
+          feeMinor: Number(tr.feeMinor) || 0,
+        }));
+
+        const mappedExchangeRates = allExchangeRates.map(xr => ({
+          ...xr,
+          rate: Number(xr.rate) || 121.5,
+        }));
+
+        const mappedBudgets = allBudgets.map(b => ({
+          ...b,
+          month: (b as any).month || (b as any).period || new Date().toISOString().slice(0, 7),
+        }));
+
         return NextResponse.json({
           exists: true,
           provider: 'postgresql_drizzle',
           data: {
-            accounts: allAccounts,
+            accounts: mappedAccounts,
             categories: allCategories,
             transactions: allTransactions,
-            transfers: allTransfers,
+            transfers: mappedTransfers,
             subscriptions: allSubscriptions,
-            budgets: allBudgets,
+            budgets: mappedBudgets,
             goals: allGoals,
-            exchangeRates: allExchangeRates,
+            exchangeRates: mappedExchangeRates,
           },
           timestamp: new Date().toISOString(),
         });
@@ -94,6 +122,7 @@ export async function POST(req: Request) {
         // Upsert into PostgreSQL tables in sequence
         if (payload.accounts && payload.accounts.length > 0) {
           for (const a of payload.accounts) {
+            const initialBal = Number(a.openingBalanceMinor ?? a.initialBalanceMinor ?? 0) || 0;
             await db
               .insert(schema.accounts)
               .values({
@@ -101,7 +130,7 @@ export async function POST(req: Request) {
                 name: a.name,
                 type: a.type,
                 currency: a.currency,
-                initialBalanceMinor: a.initialBalanceMinor || 0,
+                initialBalanceMinor: initialBal,
                 color: a.color || null,
               })
               .onConflictDoUpdate({
@@ -110,7 +139,7 @@ export async function POST(req: Request) {
                   name: a.name,
                   type: a.type,
                   currency: a.currency,
-                  initialBalanceMinor: a.initialBalanceMinor || 0,
+                  initialBalanceMinor: initialBal,
                   updatedAt: new Date(),
                 },
               });

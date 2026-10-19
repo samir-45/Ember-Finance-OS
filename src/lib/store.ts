@@ -3,6 +3,7 @@
 // ============================================================
 
 import { v4 as uuid } from 'uuid';
+import { triggerAutoSync } from './sync';
 import type {
   Account, Category, Transaction, Transfer, Subscription,
   Budget, Goal, ExchangeRate, CoachInsight, UserSettings,
@@ -24,6 +25,7 @@ function setStore<T>(key: string, data: T[]) {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(data));
+    triggerAutoSync();
   } catch (err) {
     console.error('Failed to write to localStorage:', err);
   }
@@ -85,7 +87,13 @@ function deleteItem<T extends { id: string }>(key: string, id: string): boolean 
 
 export const store = {
   // Accounts
-  getAccounts: () => getStore<Account>('accounts', []),
+  getAccounts: () => {
+    const raw = getStore<Account>('accounts', []);
+    return raw.map(a => ({
+      ...a,
+      openingBalanceMinor: Number(a.openingBalanceMinor ?? (a as any).initialBalanceMinor ?? 0) || 0,
+    }));
+  },
   createAccount: (a: Omit<Account, 'id'>) => createItem<Account>('accounts', a),
   updateAccount: (id: string, u: Partial<Account>) => updateItem<Account>('accounts', id, u),
   deleteAccount: (id: string) => deleteItem<Account>('accounts', id),
@@ -177,14 +185,38 @@ export const store = {
     settings?: UserSettings;
   }) => {
     if (typeof window === 'undefined') return;
-    if (data.accounts) setStore('accounts', data.accounts);
+    if (data.accounts) {
+      const normalizedAccounts = data.accounts.map(a => ({
+        ...a,
+        openingBalanceMinor: Number(a.openingBalanceMinor ?? (a as any).initialBalanceMinor ?? 0) || 0,
+      }));
+      setStore('accounts', normalizedAccounts);
+    }
     if (data.categories) setStore('categories', data.categories);
     if (data.transactions) setStore('transactions', data.transactions);
     if (data.subscriptions) setStore('subscriptions', data.subscriptions);
-    if (data.budgets) setStore('budgets', data.budgets);
+    if (data.budgets) {
+      const normalizedBudgets = data.budgets.map(b => ({
+        ...b,
+        month: b.month || (b as any).period || new Date().toISOString().slice(0, 7),
+      }));
+      setStore('budgets', normalizedBudgets);
+    }
     if (data.goals) setStore('goals', data.goals);
-    if (data.transfers) setStore('transfers', data.transfers);
-    if (data.exchangeRates) setStore('exchangeRates', data.exchangeRates);
+    if (data.transfers) {
+      const normalizedTransfers = data.transfers.map(tr => ({
+        ...tr,
+        exchangeRate: Number(tr.exchangeRate) || 121.5,
+      }));
+      setStore('transfers', normalizedTransfers);
+    }
+    if (data.exchangeRates) {
+      const normalizedRates = data.exchangeRates.map(xr => ({
+        ...xr,
+        rate: Number(xr.rate) || 121.5,
+      }));
+      setStore('exchangeRates', normalizedRates);
+    }
     if (data.settings) saveSettings(data.settings);
   },
 

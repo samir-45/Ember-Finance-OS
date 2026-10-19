@@ -12,6 +12,7 @@ import { store } from '@/lib/store';
 import { formatMoney, convertToUsd, computeAccountBalance } from '@/lib/finance';
 import type { CoachInsight } from '@/types';
 import { PageGuide } from '@/components/ui/PageGuide';
+import { GoldenRulesAudit } from '@/components/coach/GoldenRulesAudit';
 
 interface AiReviewData {
   executiveSummary: string;
@@ -227,6 +228,9 @@ export default function CoachPage() {
         }}
         proTip="Click 'Re-run Evaluation' anytime you log new transactions or adjust budgets to immediately recalculate anomaly scores."
       />
+
+      {/* Golden Rules of Money Management — Layer 1 Deterministic Audit */}
+      <GoldenRulesAudit />
 
       {/* AI Strategic Advisor & Executive Next Focus (Layer 2) */}
       <div

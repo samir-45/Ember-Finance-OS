@@ -11,20 +11,22 @@ import type {
 // ── Money formatting ──
 
 export function formatMoney(minor: number, currency: Currency | string = 'USD'): string {
+  const safeMinor = typeof minor === 'number' && !isNaN(minor) ? minor : 0;
   const formatted = new Intl.NumberFormat(currency === 'BDT' ? 'en-BD' : 'en-US', {
     style: 'currency',
     currency,
     maximumFractionDigits: 2,
     minimumFractionDigits: 0,
-  }).format(minor / 100);
+  }).format(safeMinor / 100);
   return formatted;
 }
 
 export function formatMoneyShort(minor: number, currency: Currency = 'USD'): string {
-  const value = minor / 100;
+  const safeMinor = typeof minor === 'number' && !isNaN(minor) ? minor : 0;
+  const value = safeMinor / 100;
   if (Math.abs(value) >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
   if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(1)}K`;
-  return formatMoney(minor, currency);
+  return formatMoney(safeMinor, currency);
 }
 
 export function paired(pair: MoneyPair | undefined, currency: 'USD' | 'BDT'): string {
@@ -66,24 +68,33 @@ export function daysUntil(dateStr: string): number {
 export function getConversionRate(): number {
   const rates = store.getExchangeRates();
   const usdToBdt = rates.find(r => r.fromCurrency === 'USD' && r.toCurrency === 'BDT');
-  if (usdToBdt) return usdToBdt.rate;
+  if (usdToBdt && !isNaN(Number(usdToBdt.rate)) && Number(usdToBdt.rate) > 0) {
+    return Number(usdToBdt.rate);
+  }
 
   const transfers = store.getTransfers();
   if (transfers.length > 0) {
-    const avgRate = transfers.reduce((sum, t) => sum + t.exchangeRate, 0) / transfers.length;
-    return avgRate;
+    const valid = transfers.filter(t => !isNaN(Number(t.exchangeRate)) && Number(t.exchangeRate) > 0);
+    if (valid.length > 0) {
+      const avgRate = valid.reduce((sum, t) => sum + Number(t.exchangeRate), 0) / valid.length;
+      return avgRate;
+    }
   }
   return 121.5;
 }
 
 export function convertToUsd(minor: number, currency: Currency): number {
-  if (currency === 'USD') return minor;
-  return Math.round(minor / getConversionRate());
+  const safeMinor = Number(minor) || 0;
+  if (currency === 'USD') return safeMinor;
+  const rate = getConversionRate() || 121.5;
+  return Math.round(safeMinor / rate);
 }
 
 export function convertToBdt(minor: number, currency: Currency): number {
-  if (currency === 'BDT') return minor;
-  return Math.round(minor * getConversionRate());
+  const safeMinor = Number(minor) || 0;
+  if (currency === 'BDT') return safeMinor;
+  const rate = getConversionRate() || 121.5;
+  return Math.round(safeMinor * rate);
 }
 
 export function toMoneyPair(minor: number, currency: Currency): MoneyPair {
@@ -102,19 +113,23 @@ export function computeAccountBalance(accountId: string): number {
   const transactions = store.getTransactions().filter(t => t.accountId === accountId && t.status === 'done');
   const transfers = store.getTransfers();
 
-  let balance = account.openingBalanceMinor;
+  let balance = Number(account.openingBalanceMinor) || 0;
 
   for (const tx of transactions) {
-    if (tx.type === 'income') balance += tx.amountMinor;
-    else if (tx.type === 'expense') balance -= tx.amountMinor;
+    const amt = Number(tx.amountMinor) || 0;
+    if (tx.type === 'income') balance += amt;
+    else if (tx.type === 'expense') balance -= amt;
   }
 
   for (const tr of transfers) {
-    if (tr.fromAccountId === accountId) balance -= tr.amountOutMinor + tr.feeMinor;
-    if (tr.toAccountId === accountId) balance += tr.amountInMinor;
+    const amtOut = Number(tr.amountOutMinor) || 0;
+    const fee = Number(tr.feeMinor) || 0;
+    const amtIn = Number(tr.amountInMinor) || 0;
+    if (tr.fromAccountId === accountId) balance -= (amtOut + fee);
+    if (tr.toAccountId === accountId) balance += amtIn;
   }
 
-  return balance;
+  return isNaN(balance) ? 0 : balance;
 }
 
 // ── Dashboard computation ──

@@ -37,13 +37,13 @@ export default function SettingsPage() {
             description: 'Set your primary base currency (BDT/USD) and the baseline BDT per USD exchange rate used in portfolio totals.',
           },
           {
-            title: 'Export Backups or Re-seed',
-            description: 'Download a complete JSON snapshot anytime for safekeeping, re-populate 6 months of sample data, or wipe records cleanly.',
+            title: 'Cloud Sync & Offline Backups',
+            description: 'Your changes sync automatically with your private Neon PostgreSQL database. Export an offline JSON snapshot anytime or manage demo data.',
           },
         ]}
         concept={{
-          name: 'Local-First Data Ownership',
-          explanation: 'All settings and images are stored locally in your browser storage. Your financial ledger is never transmitted to external third-party servers.',
+          name: 'Hybrid Local-First Architecture',
+          explanation: 'All interactions are instantaneously saved to your local storage and silently synced to your private Neon PostgreSQL database in the background.',
         }}
         proTip="You can upload any desktop wallpaper or personal photo. Ember automatically compresses it locally to ensure smooth rendering and rapid loading."
       />

@@ -6,14 +6,16 @@ import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
 import { Header } from './Header';
 import { seedData } from '@/data/seed';
+import { pullFromCloud } from '@/lib/sync';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const router = useRouter();
 
-  // Initialize seed data on first client visit
+  // Initialize seed data on first client visit and pull latest cloud records
   useEffect(() => {
     seedData();
+    pullFromCloud();
   }, []);
 
   // Global Keyboard shortcut: N to quick add activity
