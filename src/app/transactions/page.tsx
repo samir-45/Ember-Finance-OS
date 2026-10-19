@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Search, Plus, Filter, ArrowUpRight, ArrowDownLeft,
-  Trash2, Edit3, ArrowUpDown, Download, Check
+  Trash2, Edit3, ArrowUpDown, Download, Check, Sparkles
 } from 'lucide-react';
 import { store } from '@/lib/store';
 import { formatMoney, dateLabel, convertToUsd, convertToBdt } from '@/lib/finance';
@@ -39,6 +39,39 @@ function TransactionsContent() {
   const [categoryId, setCategoryId] = useState('');
   const [note, setNote] = useState('');
   const [date, setDate] = useState('');
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isAiParsing, setIsAiParsing] = useState(false);
+
+  const handleAiParse = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsAiParsing(true);
+    try {
+      const res = await fetch('/api/ai/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: aiPrompt,
+          accounts,
+          categories,
+        }),
+      });
+      const result = await res.json();
+      if (result.success && result.data) {
+        const d = result.data;
+        if (d.merchant) setMerchant(d.merchant);
+        if (d.amount) setAmount(String(d.amount));
+        if (d.currency) setCurrency(d.currency);
+        if (d.type) setType(d.type);
+        if (d.accountId) setAccountId(d.accountId);
+        if (d.categoryId) setCategoryId(d.categoryId);
+        if (d.note) setNote(d.note);
+      }
+    } catch (err) {
+      console.error('AI parse error:', err);
+    } finally {
+      setIsAiParsing(false);
+    }
+  };
 
   const refreshData = () => {
     const txs = store.getTransactions();
@@ -487,6 +520,65 @@ function TransactionsContent() {
               {editingTx ? 'Edit Transaction' : 'Record Activity'}
             </h2>
             <form onSubmit={handleSaveTransaction} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Natural Language AI Entry */}
+              {!editingTx && (
+                <div
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'rgba(255, 59, 31, 0.05)',
+                    border: '1px solid rgba(255, 59, 31, 0.18)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        color: 'var(--color-accent)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <Sparkles size={13} /> Natural Language AI Assistant
+                    </span>
+                    <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                      Gemini & Smart Heuristics
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      type="text"
+                      placeholder='e.g. "groceries 1200 bkash" or "client payment 850 usd payoneer"'
+                      value={aiPrompt}
+                      onChange={e => setAiPrompt(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAiParse();
+                        }
+                      }}
+                      className="input"
+                      style={{ fontSize: '0.8125rem', padding: '6px 12px' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAiParse}
+                      disabled={isAiParsing || !aiPrompt.trim()}
+                      className="btn btn-secondary btn-sm"
+                      style={{ flexShrink: 0, gap: 6, padding: '0 12px' }}
+                    >
+                      <Sparkles size={13} className={isAiParsing ? 'animate-spin' : ''} />
+                      <span>{isAiParsing ? 'Parsing...' : 'Auto-Fill'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Type</label>
                 <div className="tab-bar">

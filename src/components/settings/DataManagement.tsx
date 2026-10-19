@@ -16,6 +16,59 @@ export function DataManagement() {
     setTimeout(() => setSeededToast(false), 2500);
   };
 
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+
+  // Sync to Server Vault API
+  const handleServerSync = async () => {
+    setSyncStatus('Syncing to server...');
+    try {
+      const payload = {
+        accounts: store.getAccounts(),
+        categories: store.getCategories(),
+        transactions: store.getTransactions(),
+        subscriptions: store.getSubscriptions(),
+        budgets: store.getBudgets(),
+        goals: store.getGoals(),
+        transfers: store.getTransfers(),
+        exchangeRates: store.getExchangeRates(),
+        settings: store.getSettings(),
+      };
+      const res = await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSyncStatus('Server Database Synchronized! ✓');
+      } else {
+        setSyncStatus('Server sync failed');
+      }
+    } catch {
+      setSyncStatus('Server sync failed');
+    }
+    setTimeout(() => setSyncStatus(null), 3000);
+  };
+
+  // Restore from Server Vault API
+  const handleServerRestore = async () => {
+    setSyncStatus('Checking server...');
+    try {
+      const res = await fetch('/api/db');
+      const result = await res.json();
+      if (result.exists && result.data) {
+        store.importAll(result.data);
+        setSyncStatus('Restored from Server Vault! ✓');
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        setSyncStatus('No server snapshot found');
+      }
+    } catch {
+      setSyncStatus('Server restore failed');
+    }
+    setTimeout(() => setSyncStatus(null), 3000);
+  };
+
   // Export JSON Backup
   const handleExportBackup = () => {
     const backup = {
@@ -27,6 +80,7 @@ export function DataManagement() {
       subscriptions: store.getSubscriptions(),
       budgets: store.getBudgets(),
       goals: store.getGoals(),
+      transfers: store.getTransfers(),
       exchangeRates: store.getExchangeRates(),
       settings: store.getSettings(),
     };
@@ -42,21 +96,40 @@ export function DataManagement() {
   // Reset All Data
   const handleFactoryReset = () => {
     store.resetAll();
+    fetch('/api/db', { method: 'DELETE' }).catch(() => {});
     window.location.reload();
   };
 
   return (
     <div className="ember-glass" style={{ padding: '28px' }}>
-      <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: 8 }}>Data & Backup</h2>
+      <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: 8 }}>Data & Server Database Vault</h2>
       <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: 20 }}>
-        Export your complete financial records, restore sample freelancer data, or perform a clean wipe.
+        Synchronize your ledger with the persistent server vault API, export standalone JSON snapshots, or reset records cleanly.
       </p>
 
+      {syncStatus && (
+        <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, background: 'rgba(255,59,31,0.1)', color: 'var(--color-accent)', fontSize: '0.8125rem' }}>
+          {syncStatus}
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
+        {/* Sync to Server Database */}
+        <button onClick={handleServerSync} className="btn btn-primary">
+          <RefreshCw size={16} />
+          Sync to Server Database Vault
+        </button>
+
+        {/* Restore from Server Database */}
+        <button onClick={handleServerRestore} className="btn btn-secondary">
+          <Download size={16} />
+          Pull from Server Vault
+        </button>
+
         {/* Export JSON */}
         <button onClick={handleExportBackup} className="btn btn-secondary">
           <Download size={16} />
-          Export Full JSON Backup
+          Export JSON File
         </button>
 
         {/* Re-seed realistic data */}

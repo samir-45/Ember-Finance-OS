@@ -6,6 +6,7 @@ dist
 tmp
 out-tsc
 *.tsbuildinfo
+.data
 
 # dependencies
 node_modules

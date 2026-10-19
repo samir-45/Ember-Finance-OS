@@ -164,6 +164,30 @@ export const store = {
     if (typeof window !== 'undefined') localStorage.setItem(STORAGE_PREFIX + 'seeded', 'true');
   },
 
+  // Bulk import
+  importAll: (data: {
+    accounts?: Account[];
+    categories?: Category[];
+    transactions?: Transaction[];
+    subscriptions?: Subscription[];
+    budgets?: Budget[];
+    goals?: Goal[];
+    transfers?: Transfer[];
+    exchangeRates?: ExchangeRate[];
+    settings?: UserSettings;
+  }) => {
+    if (typeof window === 'undefined') return;
+    if (data.accounts) setStore('accounts', data.accounts);
+    if (data.categories) setStore('categories', data.categories);
+    if (data.transactions) setStore('transactions', data.transactions);
+    if (data.subscriptions) setStore('subscriptions', data.subscriptions);
+    if (data.budgets) setStore('budgets', data.budgets);
+    if (data.goals) setStore('goals', data.goals);
+    if (data.transfers) setStore('transfers', data.transfers);
+    if (data.exchangeRates) setStore('exchangeRates', data.exchangeRates);
+    if (data.settings) saveSettings(data.settings);
+  },
+
   // Reset
   resetAll: () => {
     if (typeof window === 'undefined') return;

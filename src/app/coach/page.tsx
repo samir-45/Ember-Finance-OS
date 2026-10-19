@@ -13,10 +13,31 @@ import { formatMoney, convertToUsd, computeAccountBalance } from '@/lib/finance'
 import type { CoachInsight } from '@/types';
 import { PageGuide } from '@/components/ui/PageGuide';
 
+interface AiReviewData {
+  executiveSummary: string;
+  nextFocus: {
+    title: string;
+    explanation: string;
+    impact: string;
+  };
+  leakages: Array<{
+    title: string;
+    details: string;
+    urgency: 'high' | 'medium' | 'low';
+  }>;
+  opportunities: Array<{
+    title: string;
+    strategy: string;
+  }>;
+  status: 'healthy' | 'warning' | 'critical';
+}
+
 export default function CoachPage() {
   const router = useRouter();
   const [insights, setInsights] = useState<CoachInsight[]>([]);
   const [evaluating, setEvaluating] = useState(false);
+  const [aiReview, setAiReview] = useState<AiReviewData | null>(null);
+  const [loadingAi, setLoadingAi] = useState(false);
 
   const loadInsights = () => {
     const existing = store.getInsights();
@@ -25,6 +46,39 @@ export default function CoachPage() {
     } else {
       const generated = runRulesEngine();
       setInsights(generated);
+    }
+  };
+
+  const fetchAiReview = async (
+    incUsd: number,
+    expUsd: number,
+    savRate: number,
+    runway: number,
+    subBurden: number,
+    topCats: Array<{ name: string; amountUsd: number; percent: number }>
+  ) => {
+    setLoadingAi(true);
+    try {
+      const res = await fetch('/api/ai/coach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          incomeUsd: incUsd,
+          expenseUsd: expUsd,
+          savingsRate: savRate,
+          runwayMonths: runway,
+          subBurdenPercent: subBurden,
+          topCategories: topCats,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setAiReview(data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load AI review:', err);
+    } finally {
+      setLoadingAi(false);
     }
   };
 
@@ -95,6 +149,42 @@ export default function CoachPage() {
   const leanRunway = totalNetWorthUsd / (avgMonthlyBurnUsd * 0.7); // 30% cut in discretionary
   const inflationRunway = totalNetWorthUsd / (avgMonthlyBurnUsd * 1.15); // 15% shock
 
+  // Current month totals for AI review
+  const thisMonthIncomeUsd = transactions
+    .filter(t => t.date.startsWith(currentMonth) && t.type === 'income')
+    .reduce((sum, t) => sum + convertToUsd(t.amountMinor, t.currency), 0);
+  const thisMonthExpenseUsd = transactions
+    .filter(t => t.date.startsWith(currentMonth) && t.type === 'expense')
+    .reduce((sum, t) => sum + convertToUsd(t.amountMinor, t.currency), 0);
+  const thisMonthSavingsRate = thisMonthIncomeUsd > 0
+    ? ((thisMonthIncomeUsd - thisMonthExpenseUsd) / thisMonthIncomeUsd) * 100
+    : 0;
+
+  useEffect(() => {
+    const subs = store.getSubscriptions().filter(s => s.active);
+    const subTotalUsd = subs.reduce((sum, s) => {
+      const amt = convertToUsd(s.amountMinor, s.currency);
+      if (s.billingCycle === 'yearly') return sum + amt / 12;
+      if (s.billingCycle === 'quarterly') return sum + amt / 3;
+      return sum + amt;
+    }, 0);
+    const subBurden = thisMonthIncomeUsd > 0 ? (subTotalUsd / thisMonthIncomeUsd) * 100 : 0;
+    const topCats = categorySpikes.slice(0, 3).map(c => ({
+      name: c.cat.name,
+      amountUsd: Math.round(c.thisMonthUsd),
+      percent: Math.round(thisMonthExpenseUsd > 0 ? (c.thisMonthUsd / thisMonthExpenseUsd) * 100 : 0),
+    }));
+
+    fetchAiReview(
+      thisMonthIncomeUsd,
+      thisMonthExpenseUsd,
+      thisMonthSavingsRate,
+      currentRunway,
+      subBurden,
+      topCats
+    );
+  }, []);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Header */}
@@ -137,6 +227,157 @@ export default function CoachPage() {
         }}
         proTip="Click 'Re-run Evaluation' anytime you log new transactions or adjust budgets to immediately recalculate anomaly scores."
       />
+
+      {/* AI Strategic Advisor & Executive Next Focus (Layer 2) */}
+      <div
+        className="ember-glass"
+        style={{
+          padding: '28px',
+          borderLeft: '4px solid var(--color-accent)',
+          position: 'relative',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  background: 'rgba(255, 59, 31, 0.15)',
+                  color: 'var(--color-accent)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Sparkles size={16} />
+              </span>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>AI Financial Advisor & Strategy</h2>
+              <span className="badge badge-planned">Gemini & Heuristic Layer</span>
+            </div>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+              Anonymized executive review analyzing cash flow health, emergency runway, and capital allocation
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              const subs = store.getSubscriptions().filter(s => s.active);
+              const subTotalUsd = subs.reduce((sum, s) => {
+                const amt = convertToUsd(s.amountMinor, s.currency);
+                if (s.billingCycle === 'yearly') return sum + amt / 12;
+                if (s.billingCycle === 'quarterly') return sum + amt / 3;
+                return sum + amt;
+              }, 0);
+              const subBurden = thisMonthIncomeUsd > 0 ? (subTotalUsd / thisMonthIncomeUsd) * 100 : 0;
+              const topCats = categorySpikes.slice(0, 3).map(c => ({
+                name: c.cat.name,
+                amountUsd: Math.round(c.thisMonthUsd),
+                percent: Math.round(thisMonthExpenseUsd > 0 ? (c.thisMonthUsd / thisMonthExpenseUsd) * 100 : 0),
+              }));
+              fetchAiReview(
+                thisMonthIncomeUsd,
+                thisMonthExpenseUsd,
+                thisMonthSavingsRate,
+                currentRunway,
+                subBurden,
+                topCats
+              );
+            }}
+            disabled={loadingAi}
+            className="btn btn-secondary btn-sm"
+          >
+            <Sparkles size={14} className={loadingAi ? 'animate-spin' : ''} />
+            <span>{loadingAi ? 'Synthesizing...' : 'Re-analyze with AI'}</span>
+          </button>
+        </div>
+
+        {loadingAi && !aiReview ? (
+          <div className="skeleton" style={{ height: 160, borderRadius: 'var(--radius-md)' }} />
+        ) : aiReview ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* Executive Diagnosis Banner */}
+            <p style={{ fontSize: '0.9375rem', lineHeight: 1.6, color: 'var(--text-primary)' }}>
+              {aiReview.executiveSummary}
+            </p>
+
+            {/* Next Focus Highlight Card */}
+            <div
+              style={{
+                padding: '16px 20px',
+                borderRadius: 'var(--radius-md)',
+                background: 'rgba(255, 106, 43, 0.08)',
+                border: '1px solid rgba(255, 106, 43, 0.25)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span className="badge badge-income" style={{ fontSize: '0.6875rem' }}>NEXT STRATEGIC FOCUS</span>
+                <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--ember-orange)' }}>
+                  {aiReview.nextFocus.title}
+                </h4>
+              </div>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 4 }}>
+                {aiReview.nextFocus.explanation}
+              </p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                <strong>Strategic Impact:</strong> {aiReview.nextFocus.impact}
+              </p>
+            </div>
+
+            {/* 2-Column: Leakages & Opportunities */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+              {/* Leakages */}
+              <div
+                style={{
+                  padding: '16px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                <span className="label-uppercase" style={{ color: 'var(--color-warning)', display: 'block', marginBottom: 10 }}>
+                  Cost Leakages & Anomalies
+                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {aiReview.leakages.length === 0 ? (
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>No critical leakages detected.</p>
+                  ) : (
+                    aiReview.leakages.map((l, idx) => (
+                      <div key={idx} style={{ borderLeft: '2px solid var(--color-warning)', paddingLeft: 10 }}>
+                        <h5 style={{ fontSize: '0.8125rem', fontWeight: 600 }}>{l.title}</h5>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>{l.details}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Opportunities */}
+              <div
+                style={{
+                  padding: '16px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                <span className="label-uppercase" style={{ color: 'var(--color-income)', display: 'block', marginBottom: 10 }}>
+                  Capital Allocation Opportunities
+                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {aiReview.opportunities.map((o, idx) => (
+                    <div key={idx} style={{ borderLeft: '2px solid var(--color-income)', paddingLeft: 10 }}>
+                      <h5 style={{ fontSize: '0.8125rem', fontWeight: 600 }}>{o.title}</h5>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>{o.strategy}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
 
       {/* Runway Stress-Testing Simulation Cards */}
       <div className="ember-glass" style={{ padding: '24px' }}>
