@@ -24,23 +24,66 @@ export default function RootLayout({
             __html: `
               (function() {
                 try {
-                  // 1. Prevent browser extensions (e.g. Urban VPN, Bitwarden, form-fillers) from polluting DOM with bis_skin_checked
-                  var origSetAttr = Element.prototype.setAttribute;
-                  Element.prototype.setAttribute = function(name, val) {
-                    if (name === 'bis_skin_checked') return;
-                    return origSetAttr.apply(this, arguments);
+                  // 1. Immediately clean up bis_skin_checked injected by browser extensions (Urban VPN, form fillers, etc.)
+                  function stripBis() {
+                    var nodes = document.querySelectorAll('[bis_skin_checked]');
+                    for (var i = 0; i < nodes.length; i++) {
+                      nodes[i].removeAttribute('bis_skin_checked');
+                    }
+                  }
+                  stripBis();
+
+                  // 2. Active MutationObserver to immediately strip bis_skin_checked whenever an extension mutates a node
+                  var observer = new MutationObserver(function(mutations) {
+                    for (var i = 0; i < mutations.length; i++) {
+                      var m = mutations[i];
+                      if (m.type === 'attributes' && m.attributeName === 'bis_skin_checked') {
+                        m.target.removeAttribute('bis_skin_checked');
+                      } else if (m.type === 'childList') {
+                        for (var j = 0; j < m.addedNodes.length; j++) {
+                          var node = m.addedNodes[j];
+                          if (node.nodeType === 1) {
+                            if (node.hasAttribute('bis_skin_checked')) {
+                              node.removeAttribute('bis_skin_checked');
+                            }
+                            var subNodes = node.querySelectorAll ? node.querySelectorAll('[bis_skin_checked]') : [];
+                            for (var k = 0; k < subNodes.length; k++) {
+                              subNodes[k].removeAttribute('bis_skin_checked');
+                            }
+                          }
+                        }
+                      }
+                    }
+                  });
+
+                  if (document.documentElement) {
+                    observer.observe(document.documentElement, {
+                      attributes: true,
+                      subtree: true,
+                      childList: true,
+                      attributeFilter: ['bis_skin_checked'],
+                    });
+                  }
+
+                  // 3. Filter console.error so extension-induced bis_skin_checked warnings don't clutter the terminal/dev overlay
+                  var origConsoleError = console.error;
+                  console.error = function() {
+                    var fullMsg = '';
+                    for (var i = 0; i < arguments.length; i++) {
+                      try {
+                        fullMsg += ' ' + (typeof arguments[i] === 'object' ? JSON.stringify(arguments[i]) : String(arguments[i]));
+                      } catch(e) {
+                        fullMsg += ' ' + String(arguments[i]);
+                      }
+                    }
+                    if (fullMsg.indexOf('bis_skin_checked') !== -1) {
+                      return;
+                    }
+                    return origConsoleError.apply(console, arguments);
                   };
 
-                  try {
-                    Object.defineProperty(Element.prototype, 'bis_skin_checked', {
-                      get: function() { return undefined; },
-                      set: function() {},
-                      configurable: true
-                    });
-                  } catch(e) {}
-
-                  // 2. Intercept and isolate runtime errors originating from third-party browser extensions
-                  // (e.g. chrome-extension://... executors/200.js reading 'M_ID') so they don't trigger Next.js dev overlays
+                  // 4. Intercept and isolate runtime errors originating from third-party browser extensions
+                  // (e.g. chrome-extension://... executors/200.js reading 'M_ID')
                   window.addEventListener('error', function(event) {
                     var fn = (event && event.filename) || '';
                     var msg = (event && event.message) || '';
