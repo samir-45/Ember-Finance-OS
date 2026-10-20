@@ -1,11 +1,11 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { ArrowRight } from 'lucide-react';
-import { SectionCard } from './SectionCard';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { formatMoney, dateLabel } from '@/lib/finance';
+import { dateLabel, formatMoney } from '@/lib/finance';
 import type { DashboardData } from '@/types';
+import { ArrowRight } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { SectionCard } from './SectionCard';
 
 interface RecentActivityWidgetProps {
   transactions: DashboardData['recentTransactions'];
@@ -43,7 +43,15 @@ export function RecentActivityWidget({ transactions }: RecentActivityWidgetProps
                 <p style={{ fontSize: '0.875rem', fontWeight: 500 }}>
                   {tx.merchant || tx.note || tx.categoryName || 'Transaction'}
                 </p>
-                <div style={{ display: 'flex', gap: 8, marginTop: 4, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 8,
+                    marginTop: 4,
+                    fontSize: '0.75rem',
+                    color: 'var(--text-muted)',
+                  }}
+                >
                   <span>{tx.categoryName}</span>
                   <span>·</span>
                   <span>{dateLabel(tx.date)}</span>

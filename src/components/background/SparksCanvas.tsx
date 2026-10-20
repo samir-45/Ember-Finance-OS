@@ -22,6 +22,7 @@ export function SparksCanvas() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
     let animId: number;
     let width = (canvas.width = window.innerWidth);
@@ -42,12 +43,16 @@ export function SparksCanvas() {
       speedY: Math.random() * 0.65 + 0.35,
       speedX: (Math.random() - 0.5) * 0.35,
       maxOpacity: Math.random() * 0.8 + 0.2,
-      hue: Math.random() > 0.3 ? Math.floor(Math.random() * 20 + 18) : Math.floor(Math.random() * 15 + 40),
+      hue:
+        Math.random() > 0.3
+          ? Math.floor(Math.random() * 20 + 18)
+          : Math.floor(Math.random() * 15 + 40),
       wobble: Math.random() * Math.PI * 2,
       wobbleSpeed: Math.random() * 0.025 + 0.01,
     }));
 
     const render = () => {
+      if (document.hidden || motion.matches) return;
       ctx.clearRect(0, 0, width, height);
 
       for (let i = 0; i < sparks.length; i++) {
@@ -62,7 +67,8 @@ export function SparksCanvas() {
         }
 
         const progress = 1 - s.y / height;
-        const fade = progress < 0.15 ? progress / 0.15 : progress > 0.85 ? (1 - progress) / 0.15 : 1;
+        const fade =
+          progress < 0.15 ? progress / 0.15 : progress > 0.85 ? (1 - progress) / 0.15 : 1;
         const currentOpacity = Math.max(0, Math.min(1, s.maxOpacity * fade));
 
         ctx.save();
@@ -79,10 +85,18 @@ export function SparksCanvas() {
     };
 
     render();
+    const resume = () => {
+      cancelAnimationFrame(animId);
+      if (!document.hidden && !motion.matches) render();
+    };
+    document.addEventListener('visibilitychange', resume);
+    motion.addEventListener('change', resume);
 
     return () => {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animId);
+      document.removeEventListener('visibilitychange', resume);
+      motion.removeEventListener('change', resume);
     };
   }, []);
 

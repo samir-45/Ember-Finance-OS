@@ -1,11 +1,11 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { SectionCard } from './SectionCard';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatMoney } from '@/lib/finance';
-import type { Currency, CategorySpending } from '@/types';
+import type { CategorySpending, Currency } from '@/types';
+import { useRouter } from 'next/navigation';
+import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
+import { SectionCard } from './SectionCard';
 
 interface CategoryPieChartProps {
   categorySpending: CategorySpending[];
@@ -15,7 +15,7 @@ interface CategoryPieChartProps {
 export function CategoryPieChart({ categorySpending, currency }: CategoryPieChartProps) {
   const router = useRouter();
 
-  const pieData = categorySpending.map(c => ({
+  const pieData = categorySpending.map((c) => ({
     name: c.categoryName,
     value: (currency === 'USD' ? c.amounts.usdMinor : c.amounts.bdtMinor) / 100,
     color: c.color,
@@ -30,11 +30,12 @@ export function CategoryPieChart({ categorySpending, currency }: CategoryPieChar
       {categorySpending.length === 0 ? (
         <EmptyState text="Categories will appear as you add expenses." />
       ) : (
-        <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'center' }}>
           <div style={{ width: 140, height: 140, flexShrink: 0 }}>
             <ResponsiveContainer>
               <PieChart>
                 <Pie
+                  isAnimationActive={false}
                   data={pieData}
                   dataKey="value"
                   cx="50%"
@@ -51,8 +52,16 @@ export function CategoryPieChart({ categorySpending, currency }: CategoryPieChar
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {categorySpending.slice(0, 6).map(cat => (
+          <div
+            style={{
+              flex: '1 1 180px',
+              minWidth: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+            }}
+          >
+            {categorySpending.slice(0, 6).map((cat) => (
               <button
                 key={cat.categoryId}
                 onClick={() => router.push(`/transactions?categoryId=${cat.categoryId}`)}
@@ -75,12 +84,19 @@ export function CategoryPieChart({ categorySpending, currency }: CategoryPieChar
                   }}
                 >
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color }} />
+                    <span
+                      style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color }}
+                    />
                     {cat.categoryName}
                   </span>
                   <span className="ember-number" style={{ color: 'var(--text-muted)' }}>
-                    {formatMoney(currency === 'USD' ? cat.amounts.usdMinor : cat.amounts.bdtMinor, currency)}
-                    <span style={{ marginLeft: 4, fontSize: '0.6875rem' }}>· {cat.percentage.toFixed(0)}%</span>
+                    {formatMoney(
+                      currency === 'USD' ? cat.amounts.usdMinor : cat.amounts.bdtMinor,
+                      currency,
+                    )}
+                    <span style={{ marginLeft: 4, fontSize: '0.6875rem' }}>
+                      · {cat.percentage.toFixed(0)}%
+                    </span>
                   </span>
                 </div>
                 <div className="progress-bar">

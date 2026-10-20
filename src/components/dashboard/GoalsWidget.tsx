@@ -1,10 +1,10 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { SectionCard } from './SectionCard';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatMoney } from '@/lib/finance';
 import type { Goal } from '@/types';
+import { useRouter } from 'next/navigation';
+import { SectionCard } from './SectionCard';
 
 interface GoalsWidgetProps {
   goals: Goal[];
@@ -27,7 +27,7 @@ export function GoalsWidget({ goals }: GoalsWidgetProps) {
         <EmptyState text="Choose something that matters and start moving toward it." />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {goals.slice(0, 3).map(goal => {
+          {goals.slice(0, 3).map((goal) => {
             const pct = Math.round((goal.currentMinor / Math.max(goal.targetMinor, 1)) * 100);
             return (
               <div key={goal.id}>
@@ -46,18 +46,20 @@ export function GoalsWidget({ goals }: GoalsWidgetProps) {
                   <div
                     className="progress-bar-fill"
                     style={{
-                      width: `${pct}%`,
+                      width: `${Math.min(pct, 100)}%`,
                       background:
                         pct >= 75
                           ? 'var(--color-income)'
                           : pct >= 50
-                          ? 'var(--color-warning)'
-                          : 'var(--color-accent)',
+                            ? 'var(--color-warning)'
+                            : 'var(--color-accent)',
                     }}
                   />
                 </div>
                 <p style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                  {formatMoney(goal.currentMinor, goal.currency)} of {formatMoney(goal.targetMinor, goal.currency)}
+                  {formatMoney(goal.currentMinor, goal.currency)} of{' '}
+                  {formatMoney(goal.targetMinor, goal.currency)}
+                  {!goal.accountId && ' · unverified amount'}
                 </p>
               </div>
             );

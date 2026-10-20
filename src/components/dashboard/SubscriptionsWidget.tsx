@@ -1,11 +1,11 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { Clock } from 'lucide-react';
-import { SectionCard } from './SectionCard';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { formatMoney, dateLabel } from '@/lib/finance';
+import { dateLabel, formatMoney } from '@/lib/finance';
 import type { Subscription } from '@/types';
+import { Clock } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { SectionCard } from './SectionCard';
 
 interface SubscriptionsWidgetProps {
   subscriptions: Subscription[];
@@ -13,7 +13,7 @@ interface SubscriptionsWidgetProps {
 
 export function SubscriptionsWidget({ subscriptions }: SubscriptionsWidgetProps) {
   const router = useRouter();
-  const activeSubs = subscriptions.filter(s => s.active);
+  const activeSubs = subscriptions.filter((s) => s.active);
 
   return (
     <SectionCard
@@ -29,12 +29,15 @@ export function SubscriptionsWidget({ subscriptions }: SubscriptionsWidgetProps)
         <EmptyState text="Recurring charges will appear here." />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {activeSubs.slice(0, 4).map(sub => (
+          {activeSubs.slice(0, 4).map((sub) => (
             <div key={sub.id} style={{ display: 'flex', justifyContent: 'space-between' }}>
               <div>
                 <p style={{ fontSize: '0.875rem' }}>{sub.name}</p>
                 <p style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                  <Clock size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                  <Clock
+                    size={10}
+                    style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }}
+                  />
                   {dateLabel(sub.nextBillingDate)}
                 </p>
               </div>

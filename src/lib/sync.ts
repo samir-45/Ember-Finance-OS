@@ -1,150 +1,178 @@
 'use client';
-
-import { useState, useEffect } from 'react';
-
-export type SyncState = 'idle' | 'syncing' | 'synced' | 'error';
-
+import type { LedgerSnapshot } from '@/types';
+import { useSyncExternalStore } from 'react';
+import { normalizeLedger } from './ledger';
+export type SyncState =
+  'idle' | 'local' | 'syncing' | 'synced' | 'error' | 'conflict' | 'signed-out';
 export interface SyncStatus {
   state: SyncState;
   lastSyncedAt: string | null;
-  provider: 'postgresql_drizzle' | 'local_vault' | null;
+  provider: 'postgresql' | 'file' | null;
   error?: string;
 }
-
-let currentStatus: SyncStatus = {
-  state: 'idle',
-  lastSyncedAt: null,
-  provider: null,
-};
-
-const SYNC_EVENT = 'ember_sync_status_changed';
-let debounceTimer: NodeJS.Timeout | null = null;
-
-function emitStatus(newStatus: Partial<SyncStatus>) {
-  currentStatus = { ...currentStatus, ...newStatus };
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: currentStatus }));
-  }
+let current: SyncStatus = { state: 'idle', lastSyncedAt: null, provider: null };
+const serverStatus = current;
+const subscribers = new Set<() => void>();
+let timer: ReturnType<typeof setTimeout> | undefined;
+let running: Promise<boolean> | null = null;
+let conflictCopy: { data: LedgerSnapshot; revision: number } | null = null;
+function status(next: Partial<SyncStatus>) {
+  current = { ...current, error: undefined, ...next };
+  subscribers.forEach((fn) => fn());
 }
-
-/**
- * Pushes entire ledger snapshot to /api/db (Neon PostgreSQL)
- */
-export async function syncNow(): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
-
-  emitStatus({ state: 'syncing' });
-
+export function useSyncStatus() {
+  return useSyncExternalStore(
+    (fn) => {
+      subscribers.add(fn);
+      return () => {
+        subscribers.delete(fn);
+      };
+    },
+    () => current,
+    () => serverStatus,
+  );
+}
+export function triggerAutoSync(delay = 1200) {
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    void syncNow();
+  }, delay);
+}
+async function push(): Promise<boolean> {
+  const { store } = await import('./store');
+  const sent = store.getLocalState();
+  if (sent.mode !== 'cloud') {
+    status({ state: 'local', provider: null });
+    return true;
+  }
+  if (current.state === 'conflict') return false;
+  if (sent.cloudRevision === null) return pullFromCloud();
+  if (!sent.dirty) return true;
+  status({ state: 'syncing' });
   try {
-    // Dynamic import to avoid circular dependency
-    const { store } = await import('@/lib/store');
-
-    const payload = {
-      accounts: store.getAccounts(),
-      categories: store.getCategories(),
-      transactions: store.getTransactions(),
-      subscriptions: store.getSubscriptions(),
-      budgets: store.getBudgets(),
-      goals: store.getGoals(),
-      transfers: store.getTransfers(),
-      exchangeRates: store.getExchangeRates(),
-      settings: store.getSettings(),
-    };
-
     const res = await fetch('/api/db', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ expectedRevision: sent.cloudRevision, data: sent.ledger }),
+      signal: AbortSignal.timeout(20000),
     });
-
-    const data = await res.json();
-    if (data.success) {
-      emitStatus({
-        state: 'synced',
-        lastSyncedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        provider: data.provider || 'postgresql_drizzle',
+    const result = await res.json();
+    if (res.status === 409) {
+      status({
+        state: 'conflict',
+        error: 'A newer server copy exists. Review it in Settings; your edits are preserved.',
       });
-      return true;
-    } else {
-      emitStatus({ state: 'error', error: data.error || 'Sync failed' });
       return false;
     }
-  } catch (err: any) {
-    emitStatus({ state: 'error', error: err.message });
-    return false;
-  }
-}
-
-/**
- * Debounced background sync triggered whenever any transaction/record is modified
- */
-export function triggerAutoSync(delayMs = 1200) {
-  if (typeof window === 'undefined') return;
-
-  if (debounceTimer) {
-    clearTimeout(debounceTimer);
-  }
-
-  debounceTimer = setTimeout(() => {
-    syncNow();
-  }, delayMs);
-}
-
-/**
- * On first boot, check if cloud has existing records to pull down
- */
-export async function pullFromCloud(): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
-
-  emitStatus({ state: 'syncing' });
-
-  try {
-    const res = await fetch('/api/db');
-    const result = await res.json();
-
-    if (result.exists && result.data) {
-      const { store } = await import('@/lib/store');
-      const d = result.data;
-
-      // Only pull if cloud has records
-      const hasCloudData = (d.transactions && d.transactions.length > 0) || (d.accounts && d.accounts.length > 0);
-      if (hasCloudData) {
-        store.importAll(d);
-        emitStatus({
-          state: 'synced',
-          lastSyncedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          provider: result.provider || 'postgresql_drizzle',
-        });
-        return true;
-      }
+    if (!res.ok) {
+      status({
+        state: res.status === 401 ? 'signed-out' : 'error',
+        error: result.error || 'Save failed',
+      });
+      return false;
     }
-
-    // If cloud is empty, push initial state to cloud
-    await syncNow();
+    if (!Number.isSafeInteger(result.revision)) throw new Error('Invalid sync response');
+    store.acknowledgeCloud(result.revision, sent.revision);
+    status({ state: 'synced', provider: result.provider, lastSyncedAt: new Date().toISOString() });
+    if (store.getLocalState().dirty) triggerAutoSync(100);
     return true;
-  } catch (err: any) {
-    emitStatus({ state: 'idle' });
+  } catch {
+    status({
+      state: 'error',
+      error: 'Could not reach the server. Unsynced edits remain in this browser.',
+    });
     return false;
   }
 }
-
-/**
- * React hook for UI components to display real-time cloud sync status
- */
-export function useSyncStatus(): SyncStatus {
-  const [status, setStatus] = useState<SyncStatus>(currentStatus);
-
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const custom = e as CustomEvent<SyncStatus>;
-      if (custom.detail) {
-        setStatus(custom.detail);
-      }
-    };
-
-    window.addEventListener(SYNC_EVENT, handler);
-    return () => window.removeEventListener(SYNC_EVENT, handler);
-  }, []);
-
-  return status;
+export function syncNow(): Promise<boolean> {
+  if (running) return running;
+  const task = () => push();
+  running = (async () => {
+    if (typeof navigator !== 'undefined' && navigator.locks)
+      return await navigator.locks.request('ember-cloud-sync', task);
+    return await task();
+  })().finally(() => {
+    running = null;
+  });
+  return running;
+}
+export async function pullFromCloud(): Promise<boolean> {
+  const { store } = await import('./store');
+  if (store.getLocalState().mode !== 'cloud') {
+    status({ state: 'local', provider: null });
+    return true;
+  }
+  status({ state: 'syncing' });
+  try {
+    const res = await fetch('/api/db', { cache: 'no-store', signal: AbortSignal.timeout(20000) });
+    const result = await res.json();
+    if (!res.ok) {
+      status({
+        state: res.status === 401 ? 'signed-out' : 'error',
+        error: result.error || 'Cannot load server copy',
+      });
+      return false;
+    }
+    if (!Number.isSafeInteger(result.revision) || result.revision < 0)
+      throw new Error('Invalid cloud revision');
+    const remote = normalizeLedger(result.data);
+    const latest = store.getLocalState();
+    const hasLocal = latest.ledger.accounts.length > 0 || latest.ledger.transactions.length > 0;
+    if (
+      result.revision > 0 &&
+      latest.dirty &&
+      hasLocal &&
+      latest.cloudRevision !== result.revision
+    ) {
+      conflictCopy = { data: remote, revision: result.revision };
+      status({
+        state: 'conflict',
+        error: 'Browser and server copies differ. Export both before choosing which to keep.',
+      });
+      return false;
+    }
+    if (latest.dirty && latest.cloudRevision === result.revision) {
+      status({ state: 'idle', provider: result.provider });
+      triggerAutoSync(50);
+      return true;
+    }
+    if (result.revision === 0 && hasLocal) {
+      store.setCloudRevisionForReplacement(0);
+      status({ state: 'idle', provider: result.provider });
+      triggerAutoSync(50);
+      return true;
+    }
+    store.acceptCloud(remote, result.revision);
+    status({ state: 'synced', provider: result.provider, lastSyncedAt: new Date().toISOString() });
+    return true;
+  } catch {
+    status({
+      state: 'error',
+      error: 'Cloud loading failed. Your browser copy has been preserved.',
+    });
+    return false;
+  }
+}
+export async function getConflictCopy() {
+  const res = await fetch('/api/db', { cache: 'no-store' });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.error || 'Cannot load server copy');
+  conflictCopy = { data: normalizeLedger(result.data), revision: result.revision };
+  return conflictCopy;
+}
+export async function resolveConflict(choice: 'server' | 'browser'): Promise<boolean> {
+  const { store } = await import('./store');
+  if (!conflictCopy) throw new Error('Load and review the latest server copy first');
+  const reviewed = conflictCopy;
+  store.saveRecoveryCopy();
+  if (choice === 'server') {
+    store.acceptCloud(reviewed.data, reviewed.revision);
+    status({ state: 'synced' });
+    conflictCopy = null;
+    return true;
+  }
+  store.setCloudRevisionForReplacement(reviewed.revision);
+  status({ state: 'idle' });
+  conflictCopy = null;
+  return syncNow();
 }

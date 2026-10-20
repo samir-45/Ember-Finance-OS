@@ -1,8 +1,8 @@
 'use client';
 
+import { Flame } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Flame } from 'lucide-react';
 import { NAV_ITEMS } from './nav-config';
 
 export function Sidebar() {
@@ -87,7 +87,9 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-subtle)', paddingTop: 20 }}>
+      <div
+        style={{ marginTop: 'auto', borderTop: '1px solid var(--border-subtle)', paddingTop: 20 }}
+      >
         <p style={{ fontSize: '0.875rem', fontWeight: 500 }}>Your private space</p>
         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
           Personal finance workspace

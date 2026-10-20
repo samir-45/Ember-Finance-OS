@@ -1,17 +1,27 @@
 'use client';
+import { localMonth } from '@/lib/dates';
+import { useLedgerVersion } from '@/lib/use-ledger';
 
-import { useState, useEffect } from 'react';
-import {
-  BarChart3, Plus, AlertCircle, TrendingUp, CheckCircle,
-  Calendar, Trash2, Edit3, DollarSign
-} from 'lucide-react';
-import { store } from '@/lib/store';
-import { formatMoney, computeBudgetPacing, convertToBdt, convertToUsd } from '@/lib/finance';
-import type { Budget, Category, Transaction, Currency } from '@/types';
+import { Dialog } from '@/components/ui/Dialog';
 import { PageGuide } from '@/components/ui/PageGuide';
-import { v4 as uuid } from 'uuid';
+import {
+  categoryContains,
+  computeBudgetPacing,
+  convertToBdt,
+  formatMoney,
+  getFinancialTransactions,
+  reportingBdt,
+  reportingUsd,
+  toMinor,
+} from '@/lib/finance';
+import { store } from '@/lib/store';
+import { isSettled } from '@/lib/ledger';
+import type { Budget, Category, Currency, Transaction } from '@/types';
+import { Plus, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 export default function BudgetsPage() {
+  const ledgerVersion = useLedgerVersion();
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -22,13 +32,13 @@ export default function BudgetsPage() {
   const [limit, setLimit] = useState('');
   const [currency, setCurrency] = useState<Currency>('BDT');
 
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  const [currentMonth, setCurrentMonth] = useState(localMonth());
 
   const refreshData = () => {
-    setBudgets(store.getBudgets());
-    const cats = store.getCategories().filter(c => c.type === 'expense');
+    setBudgets(store.getBudgets().filter((b) => b.month === currentMonth));
+    const cats = store.getCategories().filter((c) => c.type === 'expense');
     setCategories(cats);
-    setTransactions(store.getTransactions());
+    setTransactions(getFinancialTransactions());
     if (cats.length > 0 && !selectedCatId) {
       setSelectedCatId(cats[0].id);
     }
@@ -36,18 +46,19 @@ export default function BudgetsPage() {
 
   useEffect(() => {
     refreshData();
-  }, []);
+  }, [ledgerVersion, currentMonth]);
 
   // Save or Update Budget
   const handleSaveBudget = (e: React.FormEvent) => {
     e.preventDefault();
     const limitNum = parseFloat(limit);
-    if (!limitNum || limitNum <= 0 || !selectedCatId) return;
+    if (!Number.isFinite(limitNum) || limitNum <= 0 || !selectedCatId)
+      throw new Error('Choose an expense category and positive budget limit');
 
     store.setBudget({
       categoryId: selectedCatId,
       month: currentMonth,
-      limitMinor: Math.round(limitNum * 100),
+      limitMinor: toMinor(limit),
       currency,
     });
 
@@ -64,16 +75,24 @@ export default function BudgetsPage() {
   };
 
   // Aggregated Summary
-  const currentMonthTx = transactions.filter(t => t.date.startsWith(currentMonth) && t.type === 'expense' && t.status === 'done');
+  const currentMonthTx = transactions.filter(
+    (t) => t.date.startsWith(currentMonth) && t.type === 'expense' && isSettled(t),
+  );
 
   let totalBudgetedBdt = 0;
   let totalSpentBdt = 0;
 
-  budgets.forEach(b => {
+  const summaryBudgets = budgets.filter(
+    (b) =>
+      !budgets.some(
+        (parent) => parent.id !== b.id && categoryContains(parent.categoryId, b.categoryId),
+      ),
+  );
+  summaryBudgets.forEach((b) => {
     totalBudgetedBdt += convertToBdt(b.limitMinor, b.currency);
     const spent = currentMonthTx
-      .filter(t => t.categoryId === b.categoryId)
-      .reduce((s, t) => s + convertToBdt(t.amountMinor, t.currency), 0);
+      .filter((t) => categoryContains(b.categoryId, t.categoryId))
+      .reduce((s, t) => s + reportingBdt(t), 0);
     totalSpentBdt += spent;
   });
 
@@ -83,8 +102,19 @@ export default function BudgetsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Monthly Budgets & Pacing</h1>
-          <p className="page-subtitle">Linear pacing algorithms, safe daily allowances, and overspending projections</p>
+          <p className="page-subtitle">
+            Category limits and estimated pacing for variable spending
+          </p>
         </div>
+        <label className="month-picker">
+          Month
+          <input
+            aria-label="Budget month"
+            type="month"
+            value={currentMonth}
+            onChange={(e) => setCurrentMonth(e.target.value || localMonth())}
+          />
+        </label>
         <button onClick={() => setShowModal(true)} className="btn btn-primary btn-sm">
           <Plus size={15} /> Set Budget
         </button>
@@ -97,33 +127,79 @@ export default function BudgetsPage() {
         steps={[
           {
             title: 'Set Monthly Spending Caps',
-            description: 'Click "+ Set Budget" to set maximum spending limits on essential or discretionary categories (like Groceries, Dining, Shopping).',
+            description:
+              'Click "+ Set Budget" to set maximum spending limits on essential or discretionary categories (like Groceries, Dining, Shopping).',
           },
           {
             title: 'Audit Linear Pacing Status',
-            description: 'Ember calculates whether your current spending velocity is ahead or behind what is normal for the current day of the month.',
+            description:
+              'Ember calculates whether your current spending velocity is ahead or behind what is normal for the current day of the month.',
           },
           {
             title: 'Follow Safe Daily Allowances',
-            description: 'Check the "Daily safe allowance" line in each card to know exactly how much you can spend per remaining day without breaking your limit.',
+            description:
+              'Check the "Daily safe allowance" line in each card to know exactly how much you can spend per remaining day without breaking your limit.',
           },
           {
             title: 'Inspect Run-Rate Projections',
-            description: 'If you keep your current burn rate, Ember forecasts your final month-end bill before the month closes so you can course-correct early.',
+            description:
+              'If you keep your current burn rate, Ember forecasts your final month-end bill before the month closes so you can course-correct early.',
           },
         ]}
         concept={{
           name: 'Burn Run-Rate & Linear Pacing',
-          explanation: 'Pacing % compares your actual percentage spent against (currentDay ÷ totalDaysInMonth). Over 115% flags as "Pacing Hot", while over 100% of the limit flags as "Exceeded".',
+          explanation:
+            'Pacing % compares your actual percentage spent against (currentDay ÷ totalDaysInMonth). Over 115% flags as "Pacing Hot", while over 100% of the limit flags as "Exceeded".',
         }}
-        proTip="Set realistic budgets for your top 3 highest spending categories first (e.g. Groceries, Rent, Dining). Guarding these three categories alone protects over 70% of your savings rate."
+        proTip="Start with the categories you want to control. Compare limits with your actual bills and income; pacing is most useful for variable spending."
       />
 
+      {store.getBudgets().some((b) => b.month === 'unassigned') && (
+        <section className="ember-glass settings-card">
+          <h2>Legacy budgets need a month</h2>
+          <p>
+            These records had no saved calendar month. Assign them explicitly instead of guessing.
+          </p>
+          {store
+            .getBudgets()
+            .filter((b) => b.month === 'unassigned')
+            .map((b) => (
+              <div key={b.id} className="action-row">
+                <span>
+                  {categories.find((c) => c.id === b.categoryId)?.name} ·{' '}
+                  {formatMoney(b.limitMinor, b.currency)}
+                </span>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => store.updateBudget(b.id, { month: currentMonth })}
+                >
+                  Assign to selected month
+                </button>
+                <button className="btn btn-danger" onClick={() => handleDeleteBudget(b.id)}>
+                  Delete
+                </button>
+              </div>
+            ))}
+        </section>
+      )}
+      <p className="page-subtitle">
+        Pacing is an estimate for variable spending. Fixed bills can be due at the beginning of the
+        month. Parent budgets include child categories; summary totals count nested limits only
+        once.
+      </p>
       {/* High-level Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))',
+          gap: 16,
+        }}
+      >
         <div className="ember-glass" style={{ padding: '24px' }}>
           <span className="label-uppercase">Total Allocated Budget</span>
-          <p className="text-money" style={{ marginTop: 6 }}>{formatMoney(totalBudgetedBdt, 'BDT')}</p>
+          <p className="text-money" style={{ marginTop: 6 }}>
+            {formatMoney(totalBudgetedBdt, 'BDT')}
+          </p>
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4 }}>
             Across {budgets.length} budgeted categories
           </p>
@@ -131,11 +207,20 @@ export default function BudgetsPage() {
 
         <div className="ember-glass" style={{ padding: '24px' }}>
           <span className="label-uppercase">Month-to-Date Spending</span>
-          <p className="text-money" style={{ marginTop: 6, color: totalSpentBdt > totalBudgetedBdt ? 'var(--color-critical)' : 'var(--text-primary)' }}>
+          <p
+            className="text-money"
+            style={{
+              marginTop: 6,
+              color:
+                totalSpentBdt > totalBudgetedBdt ? 'var(--color-critical)' : 'var(--text-primary)',
+            }}
+          >
             {formatMoney(totalSpentBdt, 'BDT')}
           </p>
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4 }}>
-            {totalBudgetedBdt > 0 ? `${((totalSpentBdt / totalBudgetedBdt) * 100).toFixed(0)}% of limit consumed` : 'No limits set'}
+            {totalBudgetedBdt > 0
+              ? `${((totalSpentBdt / totalBudgetedBdt) * 100).toFixed(0)}% of limit consumed`
+              : 'No limits set'}
           </p>
         </div>
 
@@ -151,18 +236,30 @@ export default function BudgetsPage() {
       </div>
 
       {/* Budgets Grid with Pacing Diagnostics */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
-        {budgets.map(b => {
-          const cat = categories.find(c => c.id === b.categoryId);
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
+          gap: 20,
+        }}
+      >
+        {budgets.map((b) => {
+          const cat = categories.find((c) => c.id === b.categoryId);
           const spentThisMonth = currentMonthTx
-            .filter(t => t.categoryId === b.categoryId)
+            .filter((t) => categoryContains(b.categoryId, t.categoryId))
             .reduce((sum, t) => {
               if (t.currency === b.currency) return sum + t.amountMinor;
-              if (b.currency === 'USD') return sum + convertToUsd(t.amountMinor, t.currency);
-              return sum + convertToBdt(t.amountMinor, t.currency);
+              if (b.currency === 'USD') return sum + reportingUsd(t);
+              return sum + reportingBdt(t);
             }, 0);
 
-          const pacing = computeBudgetPacing(spentThisMonth, b.limitMinor);
+          const pacingDate =
+            currentMonth === localMonth()
+              ? new Date()
+              : new Date(
+                  currentMonth + (currentMonth < localMonth() ? '-28T12:00:00Z' : '-01T12:00:00Z'),
+                );
+          const pacing = computeBudgetPacing(spentThisMonth, b.limitMinor, pacingDate);
           const percentage = Math.round((spentThisMonth / Math.max(b.limitMinor, 1)) * 100);
 
           return (
@@ -177,10 +274,26 @@ export default function BudgetsPage() {
               }}
             >
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: 12,
+                  }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: cat?.color || '#fff' }} />
-                    <h3 style={{ fontSize: '1.0625rem', fontWeight: 600 }}>{cat?.name || 'Category'}</h3>
+                    <span
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        background: cat?.color || '#fff',
+                      }}
+                    />
+                    <h3 style={{ fontSize: '1.0625rem', fontWeight: 600 }}>
+                      {cat?.name || 'Category'}
+                    </h3>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span
@@ -188,17 +301,17 @@ export default function BudgetsPage() {
                         pacing.status === 'exceeded'
                           ? 'expense'
                           : pacing.status === 'warning'
-                          ? 'pending'
-                          : 'income'
+                            ? 'pending'
+                            : 'income'
                       }`}
                     >
                       {pacing.status === 'exceeded'
                         ? 'Exceeded'
                         : pacing.status === 'warning'
-                        ? 'Pacing Hot'
-                        : pacing.status === 'under'
-                        ? 'Pacing Under'
-                        : 'On Track'}
+                          ? 'Pacing Hot'
+                          : pacing.status === 'under'
+                            ? 'Pacing Under'
+                            : 'On Track'}
                     </span>
                     <button
                       onClick={() => handleDeleteBudget(b.id)}
@@ -221,15 +334,25 @@ export default function BudgetsPage() {
                         pacing.status === 'exceeded'
                           ? 'var(--color-critical)'
                           : pacing.status === 'warning'
-                          ? 'var(--color-warning)'
-                          : cat?.color || 'var(--color-accent)',
+                            ? 'var(--color-warning)'
+                            : cat?.color || 'var(--color-accent)',
                     }}
                   />
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', marginBottom: 16 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '0.875rem',
+                    marginBottom: 16,
+                  }}
+                >
                   <span>
-                    Spent: <strong className="ember-number">{formatMoney(spentThisMonth, b.currency)}</strong>
+                    Spent:{' '}
+                    <strong className="ember-number">
+                      {formatMoney(spentThisMonth, b.currency)}
+                    </strong>
                   </span>
                   <span style={{ color: 'var(--text-muted)' }}>
                     Limit: {formatMoney(b.limitMinor, b.currency)} ({percentage}%)
@@ -261,7 +384,10 @@ export default function BudgetsPage() {
                       className="ember-number"
                       style={{
                         fontWeight: 600,
-                        color: pacing.projectedMonthEndMinor > b.limitMinor ? 'var(--color-critical)' : 'inherit',
+                        color:
+                          pacing.projectedMonthEndMinor > b.limitMinor
+                            ? 'var(--color-critical)'
+                            : 'inherit',
                       }}
                     >
                       {formatMoney(pacing.projectedMonthEndMinor, b.currency)}
@@ -280,62 +406,91 @@ export default function BudgetsPage() {
 
       {/* Set Budget Modal */}
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ padding: '28px' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: 20 }}>Configure Category Budget</h2>
-            <form onSubmit={handleSaveBudget} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Dialog title="Configure Category Budget" onClose={() => setShowModal(false)}>
+          <form
+            onSubmit={handleSaveBudget}
+            style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+          >
+            <div>
+              <label
+                htmlFor="budgets-field-0"
+                className="label-uppercase"
+                style={{ display: 'block', marginBottom: 6 }}
+              >
+                Category
+              </label>
+              <select
+                id="budgets-field-0"
+                value={selectedCatId}
+                onChange={(e) => setSelectedCatId(e.target.value)}
+                className="input"
+              >
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id} style={{ background: '#111' }}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 12 }}>
               <div>
-                <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Category</label>
+                <label
+                  htmlFor="budgets-field-1"
+                  className="label-uppercase"
+                  style={{ display: 'block', marginBottom: 6 }}
+                >
+                  Monthly Limit
+                </label>
+                <input
+                  id="budgets-field-1"
+                  type="number"
+                  step="0.01"
+                  placeholder="e.g. 5000"
+                  value={limit}
+                  onChange={(e) => setLimit(e.target.value)}
+                  className="input"
+                  required
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="budgets-field-2"
+                  className="label-uppercase"
+                  style={{ display: 'block', marginBottom: 6 }}
+                >
+                  Currency
+                </label>
                 <select
-                  value={selectedCatId}
-                  onChange={e => setSelectedCatId(e.target.value)}
+                  id="budgets-field-2"
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value as Currency)}
                   className="input"
                 >
-                  {categories.map(c => (
-                    <option key={c.id} value={c.id} style={{ background: '#111' }}>
-                      {c.name}
-                    </option>
-                  ))}
+                  <option value="BDT" style={{ background: '#111' }}>
+                    BDT (৳)
+                  </option>
+                  <option value="USD" style={{ background: '#111' }}>
+                    USD ($)
+                  </option>
                 </select>
               </div>
+            </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 12 }}>
-                <div>
-                  <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Monthly Limit</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="e.g. 5000"
-                    value={limit}
-                    onChange={e => setLimit(e.target.value)}
-                    className="input"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Currency</label>
-                  <select
-                    value={currency}
-                    onChange={e => setCurrency(e.target.value as Currency)}
-                    className="input"
-                  >
-                    <option value="BDT" style={{ background: '#111' }}>BDT (৳)</option>
-                    <option value="USD" style={{ background: '#111' }}>USD ($)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-                <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Save Budget
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary">
+                Save Budget
+              </button>
+            </div>
+          </form>
+        </Dialog>
       )}
     </div>
   );

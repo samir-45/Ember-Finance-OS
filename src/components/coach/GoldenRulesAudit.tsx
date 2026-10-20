@@ -1,21 +1,18 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import Link from 'next/link';
+import { auditGoldenRules, type RuleStatus } from '@/lib/golden-rules';
 import {
-  ShieldCheck,
   AlertTriangle,
-  XCircle,
-  CheckCircle2,
-  Scale,
   ArrowRight,
-  TrendingUp,
-  Sparkles,
-  Info,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Scale,
+  TrendingUp,
+  XCircle,
 } from 'lucide-react';
-import { auditGoldenRules, type GoldenRulesAudit as GoldenRulesAuditType, type GoldenRuleResult, type RuleStatus } from '@/lib/golden-rules';
+import Link from 'next/link';
+import { useMemo, useState } from 'react';
 
 export function GoldenRulesAudit() {
   const audit = useMemo(() => auditGoldenRules(), []);
@@ -100,9 +97,7 @@ export function GoldenRulesAudit() {
             >
               <Scale size={18} />
             </span>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>
-              Golden Rules of Money Management — Algorithmic Audit
-            </h2>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Your personal plan checks</h2>
             <span
               style={{
                 fontSize: '0.75rem',
@@ -113,11 +108,11 @@ export function GoldenRulesAudit() {
                 color: 'var(--text-secondary)',
               }}
             >
-              100% Offline & Deterministic
+              Local calculations
             </span>
           </div>
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', maxWidth: 720 }}>
-            Mathematical diagnostic evaluating your portfolio against the 7 timeless foundations of personal finance, cash flow resilience, and capital allocation.
+            Review your recorded cash flow, personal targets, funding, and statement comparisons.
           </p>
         </div>
 
@@ -153,7 +148,11 @@ export function GoldenRulesAudit() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: '0.9375rem', fontWeight: 600 }}>{audit.gradeTitle}</span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>({audit.compositeScore}/100)</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                {audit.letterGrade === '—'
+                  ? '(insufficient history)'
+                  : `(${audit.compositeScore}/100)`}
+              </span>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
               {audit.passedCount} Passed · {audit.warningCount} Caution · {audit.failCount} Critical
@@ -224,6 +223,16 @@ export function GoldenRulesAudit() {
             >
               {/* Row Header (Clickable) */}
               <div
+                role="button"
+                tabIndex={0}
+                aria-expanded={isExpanded}
+                aria-controls={`rule-detail-${rule.id}`}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setExpandedRule(isExpanded ? null : rule.id);
+                  }
+                }}
                 onClick={() => setExpandedRule(isExpanded ? null : rule.id)}
                 style={{
                   padding: '16px 20px',
@@ -252,7 +261,9 @@ export function GoldenRulesAudit() {
                     #{rule.number}
                   </span>
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <div
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
+                    >
                       <h3 style={{ fontSize: '0.9375rem', fontWeight: 600 }}>{rule.name}</h3>
                       <span
                         style={{
@@ -280,7 +291,13 @@ export function GoldenRulesAudit() {
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                   <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    <p
+                      style={{
+                        fontSize: '0.875rem',
+                        fontWeight: 600,
+                        color: 'var(--text-primary)',
+                      }}
+                    >
                       {rule.currentValueFormatted}
                     </p>
                     <p style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
@@ -296,6 +313,7 @@ export function GoldenRulesAudit() {
               {/* Expanded Diagnostic Detail */}
               {isExpanded && (
                 <div
+                  id={`rule-detail-${rule.id}`}
                   style={{
                     padding: '16px 20px',
                     borderTop: '1px solid var(--border-subtle)',
@@ -306,10 +324,24 @@ export function GoldenRulesAudit() {
                   }}
                 >
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+                    <span
+                      style={{
+                        fontSize: '0.6875rem',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        color: 'var(--text-muted)',
+                        letterSpacing: '0.05em',
+                      }}
+                    >
                       Algorithmic Observation
                     </span>
-                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    <p
+                      style={{
+                        fontSize: '0.8125rem',
+                        color: 'var(--text-secondary)',
+                        lineHeight: 1.5,
+                      }}
+                    >
                       {rule.explanation}
                     </p>
                   </div>
@@ -329,13 +361,27 @@ export function GoldenRulesAudit() {
                     }}
                   >
                     <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <div
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}
+                      >
                         <TrendingUp size={13} style={{ color: 'var(--ember-orange)' }} />
-                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--ember-orange)' }}>
+                        <span
+                          style={{
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            color: 'var(--ember-orange)',
+                          }}
+                        >
                           Financial Advisor Prescription
                         </span>
                       </div>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-primary)', lineHeight: 1.4 }}>
+                      <p
+                        style={{
+                          fontSize: '0.75rem',
+                          color: 'var(--text-primary)',
+                          lineHeight: 1.4,
+                        }}
+                      >
                         {rule.advisorPrescription}
                       </p>
                     </div>

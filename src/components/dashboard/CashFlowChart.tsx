@@ -1,11 +1,9 @@
 'use client';
 
-import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
-} from 'recharts';
-import { SectionCard } from './SectionCard';
 import { formatMoney } from '@/lib/finance';
 import type { Currency } from '@/types';
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { SectionCard } from './SectionCard';
 
 interface CashFlowItem {
   month: string;
@@ -22,7 +20,9 @@ export function CashFlowChart({ data, currency }: CashFlowChartProps) {
   return (
     <SectionCard
       title="Your cash flow"
-      action={<span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Last 6 months</span>}
+      action={
+        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Last 6 months</span>
+      }
       index={0}
     >
       <div style={{ height: 220 }}>
@@ -38,8 +38,17 @@ export function CashFlowChart({ data, currency }: CashFlowChartProps) {
                 <stop offset="100%" stopColor="#ff3b1f" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <XAxis dataKey="month" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+            <XAxis
+              dataKey="month"
+              tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+            />
             <Tooltip
               contentStyle={{
                 background: 'rgba(15,15,15,0.95)',
@@ -47,19 +56,57 @@ export function CashFlowChart({ data, currency }: CashFlowChartProps) {
                 borderRadius: 'var(--radius-md)',
                 fontSize: '0.8125rem',
               }}
-              formatter={(value: any) => [formatMoney(Math.round(Number(value) * 100), currency), '']}
+              formatter={(value) => [formatMoney(Math.round(Number(value) * 100), currency), '']}
             />
-            <Area type="monotone" dataKey="income" stroke="#6ee7a8" fill="url(#incomeGrad)" strokeWidth={2} />
-            <Area type="monotone" dataKey="expenses" stroke="#ff3b1f" fill="url(#expenseGrad)" strokeWidth={2} />
+            <Area
+              isAnimationActive={false}
+              type="monotone"
+              dataKey="income"
+              stroke="#6ee7a8"
+              fill="url(#incomeGrad)"
+              strokeWidth={2}
+            />
+            <Area
+              isAnimationActive={false}
+              type="monotone"
+              dataKey="expenses"
+              stroke="#ff3b1f"
+              fill="url(#expenseGrad)"
+              strokeWidth={2}
+            />
           </AreaChart>
         </ResponsiveContainer>
       </div>
-      <div style={{ display: 'flex', gap: 20, borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 8 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: 20,
+          borderTop: '1px solid var(--border-subtle)',
+          paddingTop: 12,
+          marginTop: 8,
+        }}
+      >
+        <span
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: '0.75rem',
+            color: 'var(--text-muted)',
+          }}
+        >
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#6ee7a8' }} />
           Income
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+        <span
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: '0.75rem',
+            color: 'var(--text-muted)',
+          }}
+        >
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff3b1f' }} />
           Expenses
         </span>

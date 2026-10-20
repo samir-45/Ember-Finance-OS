@@ -1,381 +1,73 @@
+import { ledgerSchema, validateLedger } from '@/lib/ledger';
+import { readJson, requireOwner } from '@/lib/server/auth';
+import { ConflictError, loadSnapshot, saveSnapshot } from '@/lib/server/persistence';
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
-import { getDb, isDatabaseConfigured, schema } from '@/lib/db';
-
-const DB_DIR = path.join(process.cwd(), '.data');
-const DB_FILE = path.join(DB_DIR, 'ember_vault.json');
-
-function ensureDbExists() {
-  if (!fs.existsSync(DB_DIR)) {
-    fs.mkdirSync(DB_DIR, { recursive: true });
-  }
-}
-
-// ── GET: Read from PostgreSQL (or Local File Vault) ──
-export async function GET() {
+import { z } from 'zod';
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+const input = z.object({
+  expectedRevision: z.number().int().safe().nonnegative(),
+  data: ledgerSchema,
+});
+const headers = { 'Cache-Control': 'no-store' };
+export async function GET(req: Request) {
+  const denied = requireOwner(req);
+  if (denied) return denied;
   try {
-    const db = getDb();
-
-    if (db && isDatabaseConfigured()) {
-      try {
-        const [
-          allAccounts,
-          allCategories,
-          allTransactions,
-          allTransfers,
-          allSubscriptions,
-          allBudgets,
-          allGoals,
-          allExchangeRates,
-        ] = await Promise.all([
-          db.select().from(schema.accounts),
-          db.select().from(schema.categories),
-          db.select().from(schema.transactions),
-          db.select().from(schema.transfers),
-          db.select().from(schema.subscriptions),
-          db.select().from(schema.budgets),
-          db.select().from(schema.goals),
-          db.select().from(schema.exchangeRates),
-        ]);
-
-        const mappedAccounts = allAccounts.map(a => ({
-          id: a.id,
-          name: a.name,
-          type: a.type,
-          currency: a.currency,
-          openingBalanceMinor: (a as any).openingBalanceMinor ?? (a as any).initialBalanceMinor ?? 0,
-          color: a.color || '#ff6a2b',
-          createdAt: a.createdAt instanceof Date ? a.createdAt.toISOString() : String(a.createdAt || new Date().toISOString()),
-        }));
-
-        const mappedTransfers = allTransfers.map(tr => ({
-          ...tr,
-          exchangeRate: Number(tr.exchangeRate) || 121.5,
-          fromAmountMinor: Number(tr.fromAmountMinor) || 0,
-          toAmountMinor: Number(tr.toAmountMinor) || 0,
-          feeMinor: Number(tr.feeMinor) || 0,
-        }));
-
-        const mappedExchangeRates = allExchangeRates.map(xr => ({
-          ...xr,
-          rate: Number(xr.rate) || 121.5,
-        }));
-
-        const mappedBudgets = allBudgets.map(b => ({
-          ...b,
-          month: (b as any).month || (b as any).period || new Date().toISOString().slice(0, 7),
-        }));
-
-        return NextResponse.json({
-          exists: true,
-          provider: 'postgresql_drizzle',
-          data: {
-            accounts: mappedAccounts,
-            categories: allCategories,
-            transactions: allTransactions,
-            transfers: mappedTransfers,
-            subscriptions: allSubscriptions,
-            budgets: mappedBudgets,
-            goals: allGoals,
-            exchangeRates: mappedExchangeRates,
-          },
-          timestamp: new Date().toISOString(),
-        });
-      } catch (dbErr: any) {
-        console.warn('PostgreSQL query error, falling back to local file vault:', dbErr.message);
-      }
-    }
-
-    // Local Vault Fallback
-    ensureDbExists();
-    if (!fs.existsSync(DB_FILE)) {
-      return NextResponse.json({
-        exists: false,
-        provider: 'local_vault',
-        message: 'No server snapshot found. Client localStorage is the active ledger.',
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    const raw = fs.readFileSync(DB_FILE, 'utf-8');
-    const data = JSON.parse(raw);
-    return NextResponse.json({
-      exists: true,
-      provider: 'local_vault',
-      data,
-      timestamp: data.savedAt || new Date().toISOString(),
-    });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    const snapshot = await loadSnapshot();
+    return NextResponse.json(
+      { success: true, exists: snapshot.revision > 0, ...snapshot },
+      { headers },
+    );
+  } catch {
+    return NextResponse.json(
+      {
+        error:
+          'Server ledger unavailable. Check storage configuration and migrations. Your browser copy is unchanged.',
+      },
+      { status: 503, headers },
+    );
   }
 }
-
-// ── POST: Sync/Upsert to PostgreSQL (or Local File Vault) ──
 export async function POST(req: Request) {
+  const denied = requireOwner(req);
+  if (denied) return denied;
+  let body: z.infer<typeof input>;
   try {
-    const payload = await req.json();
-    const db = getDb();
-
-    if (db && isDatabaseConfigured()) {
-      try {
-        // Upsert into PostgreSQL tables in sequence
-        if (payload.accounts && payload.accounts.length > 0) {
-          for (const a of payload.accounts) {
-            const initialBal = Number(a.openingBalanceMinor ?? a.initialBalanceMinor ?? 0) || 0;
-            await db
-              .insert(schema.accounts)
-              .values({
-                id: a.id,
-                name: a.name,
-                type: a.type,
-                currency: a.currency,
-                initialBalanceMinor: initialBal,
-                color: a.color || null,
-              })
-              .onConflictDoUpdate({
-                target: schema.accounts.id,
-                set: {
-                  name: a.name,
-                  type: a.type,
-                  currency: a.currency,
-                  initialBalanceMinor: initialBal,
-                  updatedAt: new Date(),
-                },
-              });
-          }
-        }
-
-        if (payload.categories && payload.categories.length > 0) {
-          for (const c of payload.categories) {
-            await db
-              .insert(schema.categories)
-              .values({
-                id: c.id,
-                name: c.name,
-                type: c.type,
-                icon: c.icon || null,
-                color: c.color || null,
-                isCustom: Boolean(c.isCustom),
-              })
-              .onConflictDoUpdate({
-                target: schema.categories.id,
-                set: {
-                  name: c.name,
-                  type: c.type,
-                  icon: c.icon || null,
-                  color: c.color || null,
-                },
-              });
-          }
-        }
-
-        if (payload.transactions && payload.transactions.length > 0) {
-          for (const t of payload.transactions) {
-            await db
-              .insert(schema.transactions)
-              .values({
-                id: t.id,
-                accountId: t.accountId,
-                categoryId: t.categoryId,
-                transferId: t.transferId || null,
-                type: t.type,
-                amountMinor: t.amountMinor,
-                currency: t.currency,
-                merchant: t.merchant,
-                note: t.note || null,
-                date: t.date,
-                tags: t.tags || [],
-                paymentMethod: t.paymentMethod || null,
-                status: t.status || 'done',
-              })
-              .onConflictDoUpdate({
-                target: schema.transactions.id,
-                set: {
-                  accountId: t.accountId,
-                  categoryId: t.categoryId,
-                  transferId: t.transferId || null,
-                  type: t.type,
-                  amountMinor: t.amountMinor,
-                  currency: t.currency,
-                  merchant: t.merchant,
-                  note: t.note || null,
-                  date: t.date,
-                  tags: t.tags || [],
-                  status: t.status || 'done',
-                },
-              });
-          }
-        }
-
-        if (payload.transfers && payload.transfers.length > 0) {
-          for (const tr of payload.transfers) {
-            await db
-              .insert(schema.transfers)
-              .values({
-                id: tr.id,
-                fromAccountId: tr.fromAccountId,
-                toAccountId: tr.toAccountId,
-                fromAmountMinor: tr.fromAmountMinor,
-                toAmountMinor: tr.toAmountMinor,
-                exchangeRate: String(tr.exchangeRate),
-                feeMinor: tr.feeMinor || 0,
-                feeCurrency: tr.feeCurrency,
-                date: tr.date,
-                note: tr.note || null,
-              })
-              .onConflictDoUpdate({
-                target: schema.transfers.id,
-                set: {
-                  fromAmountMinor: tr.fromAmountMinor,
-                  toAmountMinor: tr.toAmountMinor,
-                  exchangeRate: String(tr.exchangeRate),
-                  feeMinor: tr.feeMinor || 0,
-                  feeCurrency: tr.feeCurrency,
-                  date: tr.date,
-                  note: tr.note || null,
-                },
-              });
-          }
-        }
-
-        if (payload.subscriptions && payload.subscriptions.length > 0) {
-          for (const s of payload.subscriptions) {
-            await db
-              .insert(schema.subscriptions)
-              .values({
-                id: s.id,
-                name: s.name,
-                amountMinor: s.amountMinor,
-                currency: s.currency,
-                billingCycle: s.billingCycle,
-                nextBillingDate: s.nextBillingDate,
-                accountId: s.accountId,
-                categoryId: s.categoryId,
-                active: s.active ?? true,
-              })
-              .onConflictDoUpdate({
-                target: schema.subscriptions.id,
-                set: {
-                  name: s.name,
-                  amountMinor: s.amountMinor,
-                  currency: s.currency,
-                  billingCycle: s.billingCycle,
-                  nextBillingDate: s.nextBillingDate,
-                  active: s.active ?? true,
-                },
-              });
-          }
-        }
-
-        if (payload.budgets && payload.budgets.length > 0) {
-          for (const b of payload.budgets) {
-            await db
-              .insert(schema.budgets)
-              .values({
-                id: b.id,
-                categoryId: b.categoryId,
-                limitMinor: b.limitMinor,
-                currency: b.currency,
-                period: b.period || 'monthly',
-              })
-              .onConflictDoUpdate({
-                target: schema.budgets.id,
-                set: {
-                  limitMinor: b.limitMinor,
-                  currency: b.currency,
-                  period: b.period || 'monthly',
-                },
-              });
-          }
-        }
-
-        if (payload.goals && payload.goals.length > 0) {
-          for (const g of payload.goals) {
-            await db
-              .insert(schema.goals)
-              .values({
-                id: g.id,
-                name: g.name,
-                targetMinor: g.targetMinor,
-                currentMinor: g.currentMinor || 0,
-                currency: g.currency,
-                deadline: g.deadline || null,
-              })
-              .onConflictDoUpdate({
-                target: schema.goals.id,
-                set: {
-                  name: g.name,
-                  targetMinor: g.targetMinor,
-                  currentMinor: g.currentMinor || 0,
-                  currency: g.currency,
-                  deadline: g.deadline || null,
-                },
-              });
-          }
-        }
-
-        return NextResponse.json({
-          success: true,
-          provider: 'postgresql_drizzle',
-          message: 'Synchronized successfully to PostgreSQL database',
-          savedAt: new Date().toISOString(),
-        });
-      } catch (dbErr: any) {
-        console.warn('PostgreSQL write error, persisting to local file vault:', dbErr.message);
-      }
-    }
-
-    // Local Vault Backup
-    ensureDbExists();
-    const snapshot = {
-      ...payload,
-      savedAt: new Date().toISOString(),
-      version: '1.0.0',
-    };
-    fs.writeFileSync(DB_FILE, JSON.stringify(snapshot, null, 2), 'utf-8');
-
-    return NextResponse.json({
-      success: true,
-      provider: 'local_vault',
-      message: 'Server vault snapshot saved successfully',
-      savedAt: snapshot.savedAt,
-    });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    body = input.parse(await readJson(req));
+  } catch {
+    return NextResponse.json(
+      { error: 'Invalid ledger. Check amounts, dates, currencies, references, and request size.' },
+      { status: 400, headers },
+    );
+  }
+  try {
+    const saved = await saveSnapshot(validateLedger(body.data), body.expectedRevision);
+    return NextResponse.json(
+      { success: true, revision: saved.revision, provider: saved.provider },
+      { headers },
+    );
+  } catch (err) {
+    if (err instanceof ConflictError)
+      return NextResponse.json(
+        { error: err.message, revision: err.revision },
+        { status: 409, headers },
+      );
+    return NextResponse.json(
+      {
+        error:
+          'Save failed. No fallback was used. Keep your browser copy and retry after checking the server.',
+      },
+      { status: 503, headers },
+    );
   }
 }
-
-// ── DELETE: Clear Data ──
-export async function DELETE() {
-  try {
-    const db = getDb();
-    if (db && isDatabaseConfigured()) {
-      try {
-        await Promise.all([
-          db.delete(schema.transactions),
-          db.delete(schema.transfers),
-          db.delete(schema.subscriptions),
-          db.delete(schema.budgets),
-          db.delete(schema.goals),
-          db.delete(schema.accounts),
-          db.delete(schema.categories),
-        ]);
-      } catch (e) {
-        console.warn('Failed clearing PostgreSQL tables:', e);
-      }
-    }
-
-    if (fs.existsSync(DB_FILE)) {
-      fs.unlinkSync(DB_FILE);
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: 'Database ledger wiped cleanly',
-      timestamp: new Date().toISOString(),
-    });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+// Clearing the current ledger uses the same versioned POST path. History is retained.
+export async function DELETE(req: Request) {
+  const denied = requireOwner(req);
+  if (denied) return denied;
+  return NextResponse.json(
+    { error: 'Use a revision-checked empty ledger save from Settings.' },
+    { status: 405, headers },
+  );
 }

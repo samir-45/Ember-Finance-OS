@@ -17,7 +17,7 @@ export function MetricCard({ label, value, hint, tone, index }: MetricCardProps)
       className="ember-glass"
       style={{ padding: '20px 24px' }}
       custom={index}
-      initial="hidden"
+      initial={false}
       animate="visible"
       variants={cardVariants}
     >
@@ -30,13 +30,15 @@ export function MetricCard({ label, value, hint, tone, index }: MetricCardProps)
             tone === 'income'
               ? 'var(--color-income)'
               : tone === 'expense'
-              ? 'var(--color-expense)'
-              : 'var(--text-primary)',
+                ? 'var(--color-expense)'
+                : 'var(--text-primary)',
         }}
       >
         {value}
       </p>
-      {hint && <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 6 }}>{hint}</p>}
+      {hint && (
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 6 }}>{hint}</p>
+      )}
     </motion.div>
   );
 }

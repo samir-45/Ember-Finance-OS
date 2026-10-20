@@ -1,0 +1,50 @@
+[
+  {
+    "case": "Currency mismatch: spend BDT 1,200 from USD account with USD 1,000",
+    "expectedUsdMinor": 99000,
+    "actualUsdMinor": -20000
+  },
+  {
+    "case": "USD 5 transfer fee reduces balance but is missing from expense totals",
+    "usdBalanceMinor": 89500,
+    "expensesUsdMinor": 0
+  },
+  {
+    "case": "Database-shaped transfer is read by client balance calculator",
+    "expectedUsdMinor": 89500,
+    "actualUsdMinor": 99500,
+    "expectedBdtMinor": 1200000,
+    "actualBdtMinor": 0
+  },
+  {
+    "case": "Annual USD 120 subscription monthly load",
+    "normalizedUsdMinor": 1000,
+    "ruleText": "Your subscriptions cost $120/month — 12.0% of income. Consider which ones you truly use."
+  },
+  {
+    "case": "Six-month chart in Asia/Dhaka",
+    "expectedLastMonth": "2026-10",
+    "actualChartMonths": [
+      "2026-04",
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08",
+      "2026-09"
+    ]
+  },
+  {
+    "case": "CSV escaping and formula protection",
+    "csv": "Date,Type,Amount,Currency,Category,Account,Merchant,Note,Status,Tags\n\"2026-10-10\",\"expense\",\"1.00\",\"USD\",\"Subscriptions\",\"usd\",\"Client \"Alpha\"\",\"=1+1\",\"done\",\"\""
+  },
+  {
+    "case": "Failed storage write is reported to caller as successful creation",
+    "returnedId": "lost-write",
+    "persisted": false
+  },
+  {
+    "case": "Dhaka month boundary uses previous UTC date",
+    "localDate": "2026-11-01",
+    "utcDateUsedByApp": "2026-10-31"
+  }
+]

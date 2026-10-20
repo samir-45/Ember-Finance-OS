@@ -1,11 +1,14 @@
 'use client';
 
-import { useRef } from 'react';
-import { Sparkles, UploadCloud, RotateCcw, Check } from 'lucide-react';
 import {
-  useBackground, PRESET_OPTIONS, DEFAULT_BG_CONFIG,
-  compressImageFile, type BackgroundPresetId
+  DEFAULT_BG_CONFIG,
+  PRESET_OPTIONS,
+  compressImageFile,
+  useBackground,
+  type BackgroundPresetId,
 } from '@/lib/background';
+import { Check, RotateCcw, Sparkles, UploadCloud } from 'lucide-react';
+import { useRef } from 'react';
 
 export function BackgroundCustomizer() {
   const [bgConfig, setBgConfig] = useBackground();
@@ -21,6 +24,8 @@ export function BackgroundCustomizer() {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith('image/') || file.size > 10 * 1024 * 1024)
+      throw new Error('Choose an image smaller than 10 MB');
 
     try {
       const dataUrl = await compressImageFile(file, 1920, 0.88);
@@ -44,7 +49,14 @@ export function BackgroundCustomizer() {
 
   return (
     <div className="ember-glass" style={{ padding: '28px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 20,
+        }}
+      >
         <div>
           <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Background & Atmosphere</h2>
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: 4 }}>
@@ -54,7 +66,7 @@ export function BackgroundCustomizer() {
         <button
           onClick={handleResetToDefault}
           className="btn btn-secondary btn-sm"
-          title="Reset to default TudSa flame"
+          title="Restore quiet default background"
         >
           <RotateCcw size={14} />
           Reset to Default
@@ -65,7 +77,7 @@ export function BackgroundCustomizer() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
           gap: 16,
           marginBottom: 24,
         }}
@@ -75,13 +87,24 @@ export function BackgroundCustomizer() {
           return (
             <div
               key={opt.id}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isSelected}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleSelectPreset(opt.id);
+                }
+              }}
               onClick={() => handleSelectPreset(opt.id)}
               style={{
                 position: 'relative',
                 cursor: 'pointer',
                 borderRadius: 'var(--radius-md)',
                 padding: 14,
-                border: isSelected ? '2px solid var(--color-accent)' : '1px solid var(--border-subtle)',
+                border: isSelected
+                  ? '2px solid var(--color-accent)'
+                  : '1px solid var(--border-subtle)',
                 background: isSelected ? 'rgba(255, 59, 31, 0.08)' : 'rgba(255, 255, 255, 0.02)',
                 transition: 'all 200ms ease',
               }}
@@ -158,6 +181,15 @@ export function BackgroundCustomizer() {
 
         {/* Custom Upload Card */}
         <div
+          role="button"
+          tabIndex={0}
+          aria-label="Upload custom background"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
           onClick={() => fileInputRef.current?.click()}
           style={{
             position: 'relative',
@@ -195,7 +227,9 @@ export function BackgroundCustomizer() {
             {!bgConfig.customImageDataUrl && (
               <>
                 <UploadCloud size={24} style={{ color: 'var(--color-accent)', marginBottom: 4 }} />
-                <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>Click to upload</span>
+                <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                  Click to upload
+                </span>
               </>
             )}
             {bgConfig.presetId === 'custom' && (
@@ -238,20 +272,29 @@ export function BackgroundCustomizer() {
           paddingTop: 20,
           borderTop: '1px solid var(--border-subtle)',
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))',
           gap: 20,
           alignItems: 'center',
         }}
       >
         {/* Ember Sparks Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 16 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingRight: 16,
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div
               style={{
                 width: 32,
                 height: 32,
                 borderRadius: 8,
-                background: bgConfig.enableSparks ? 'rgba(255,59,31,0.15)' : 'rgba(255,255,255,0.05)',
+                background: bgConfig.enableSparks
+                  ? 'rgba(255,59,31,0.15)'
+                  : 'rgba(255,255,255,0.05)',
                 color: bgConfig.enableSparks ? 'var(--color-accent)' : 'var(--text-muted)',
                 display: 'flex',
                 alignItems: 'center',
@@ -262,10 +305,14 @@ export function BackgroundCustomizer() {
             </div>
             <div>
               <p style={{ fontSize: '0.875rem', fontWeight: 500 }}>Drifting Ember Sparks</p>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Floating ambient particles</p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Floating ambient particles
+              </p>
             </div>
           </div>
           <button
+            aria-pressed={bgConfig.enableSparks}
+            aria-label="Drifting ember sparks"
             onClick={() => setBgConfig({ ...bgConfig, enableSparks: !bgConfig.enableSparks })}
             className={`btn btn-sm ${bgConfig.enableSparks ? 'btn-primary' : 'btn-secondary'}`}
           >
@@ -276,12 +323,18 @@ export function BackgroundCustomizer() {
         {/* Brightness Slider */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Brightness</span>
-            <span className="ember-number" style={{ fontSize: '0.8125rem', color: 'var(--text-primary)' }}>
+            <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+              Brightness
+            </span>
+            <span
+              className="ember-number"
+              style={{ fontSize: '0.8125rem', color: 'var(--text-primary)' }}
+            >
               {bgConfig.brightness}%
             </span>
           </div>
           <input
+            aria-label="Background brightness"
             type="range"
             min="50"
             max="140"
@@ -295,11 +348,15 @@ export function BackgroundCustomizer() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
             <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Soft Blur</span>
-            <span className="ember-number" style={{ fontSize: '0.8125rem', color: 'var(--text-primary)' }}>
+            <span
+              className="ember-number"
+              style={{ fontSize: '0.8125rem', color: 'var(--text-primary)' }}
+            >
               {bgConfig.blur}px
             </span>
           </div>
           <input
+            aria-label="Background blur"
             type="range"
             min="0"
             max="20"

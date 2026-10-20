@@ -1,0 +1,573 @@
+{
+  "results": [
+    {
+      "route": "dashboard",
+      "width": 1440,
+      "title": "Your money, in focus",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "clipped": [],
+      "text": "OCTOBER 2026\n\nYour money, in focus\n\nA calm overview of what came in, what went out, and what you're building.\n\nBDT\nUSD\nHow to use Dashboard\nNET WORTH\n\nBDT 290,0"
+    },
+    {
+      "route": "transactions",
+      "width": 1440,
+      "title": "Transactions Ledger",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "clipped": [],
+      "text": "Transactions Ledger\n\nGranular journal with multi-currency sorting, account filters, and running tallies\n\nAdd Activity\nHow to use Transactions Ledger\nFILTERED IN"
+    },
+    {
+      "case": "Add Activity modal",
+      "position": "static",
+      "top": 611.59375,
+      "height": 709,
+      "viewportHeight": 1000,
+      "role": null,
+      "dialogs": 0
+    },
+    {
+      "route": "accounts",
+      "width": 1440,
+      "title": "Accounts & Wallets",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "clipped": [],
+      "text": "Accounts & Wallets\n\nMulti-currency liquidity, FX conversions, and balance tracking\n\nTransfer / Convert\nNew Account\nHow to use Accounts & Wallets\nCONSOLIDATED PO"
+    },
+    {
+      "route": "subscriptions",
+      "width": 1440,
+      "title": "Subscriptions & Recurring Load",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "clipped": [],
+      "text": "Subscriptions & Recurring Load\n\nSaaS licenses, normalized monthly run rates, and renewal audits\n\nAdd Subscription\nHow to use Subscriptions & Recurring Commitmen"
+    },
+    {
+      "route": "budgets",
+      "width": 1440,
+      "title": "Monthly Budgets & Pacing",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "clipped": [],
+      "text": "Monthly Budgets & Pacing\n\nLinear pacing algorithms, safe daily allowances, and overspending projections\n\nSet Budget\nHow to use Monthly Budgets & Pacing\nTOTAL AL"
+    },
+    {
+      "route": "goals",
+      "width": 1440,
+      "title": "Financial Goals & Sinking Funds",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "clipped": [],
+      "text": "Financial Goals & Sinking Funds\n\nAmortized monthly deposit requirements, milestone tracking, and sinking funds\n\nCreate Goal\nHow to use Financial Goals & Sinking"
+    },
+    {
+      "route": "reports",
+      "width": 1440,
+      "title": "Financial Intelligence Reports",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "clipped": [],
+      "text": "Financial Intelligence Reports\n\nMulti-currency cash flow statements, 50/30/20 variance, and FX conversion audits\n\nBDT\nUSD\nExport CSV\nHow to use Financial Intell"
+    },
+    {
+      "route": "coach",
+      "width": 1440,
+      "title": "Ember Financial Coach & Scenarios",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "clipped": [],
+      "text": "Ember Financial Coach & Scenarios\n\nDeterministic rules engine detecting category anomalies, runway scenarios, and savings wins\n\nRe-run Evaluation\nHow to use Fin"
+    },
+    {
+      "route": "settings",
+      "width": 1440,
+      "title": "Settings & Atmosphere",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "clipped": [],
+      "text": "Settings & Atmosphere\n\nPersonalize your background, active currencies, conversion rates, and data\n\nHow to use Settings & Atmosphere\nEmber Finance OS — Complete "
+    },
+    {
+      "route": "dashboard",
+      "width": 768,
+      "title": "Your money, in focus",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "clipped": [],
+      "text": "OCTOBER 2026\n\nYour money, in focus\n\nA calm overview of what came in, what went out, and what you're building.\n\nBDT\nUSD\nHow to use Dashboard\nNET WORTH\n\nBDT 290,0"
+    },
+    {
+      "route": "transactions",
+      "width": 768,
+      "title": "Transactions Ledger",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "clipped": [],
+      "text": "Transactions Ledger\n\nGranular journal with multi-currency sorting, account filters, and running tallies\n\nAdd Activity\nHow to use Transactions Ledger\nFILTERED IN"
+    },
+    {
+      "route": "accounts",
+      "width": 768,
+      "title": "Accounts & Wallets",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "clipped": [],
+      "text": "Accounts & Wallets\n\nMulti-currency liquidity, FX conversions, and balance tracking\n\nTransfer / Convert\nNew Account\nHow to use Accounts & Wallets\nCONSOLIDATED PO"
+    },
+    {
+      "route": "subscriptions",
+      "width": 768,
+      "title": "Subscriptions & Recurring Load",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "clipped": [],
+      "text": "Subscriptions & Recurring Load\n\nSaaS licenses, normalized monthly run rates, and renewal audits\n\nAdd Subscription\nHow to use Subscriptions & Recurring Commitmen"
+    },
+    {
+      "route": "budgets",
+      "width": 768,
+      "title": "Monthly Budgets & Pacing",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "clipped": [],
+      "text": "Monthly Budgets & Pacing\n\nLinear pacing algorithms, safe daily allowances, and overspending projections\n\nSet Budget\nHow to use Monthly Budgets & Pacing\nTOTAL AL"
+    },
+    {
+      "route": "goals",
+      "width": 768,
+      "title": "Financial Goals & Sinking Funds",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "clipped": [],
+      "text": "Financial Goals & Sinking Funds\n\nAmortized monthly deposit requirements, milestone tracking, and sinking funds\n\nCreate Goal\nHow to use Financial Goals & Sinking"
+    },
+    {
+      "route": "reports",
+      "width": 768,
+      "title": "Financial Intelligence Reports",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "clipped": [],
+      "text": "Financial Intelligence Reports\n\nMulti-currency cash flow statements, 50/30/20 variance, and FX conversion audits\n\nBDT\nUSD\nExport CSV\nHow to use Financial Intell"
+    },
+    {
+      "route": "coach",
+      "width": 768,
+      "title": "Ember Financial Coach & Scenarios",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "clipped": [],
+      "text": "Ember Financial Coach & Scenarios\n\nDeterministic rules engine detecting category anomalies, runway scenarios, and savings wins\n\nRe-run Evaluation\nHow to use Fin"
+    },
+    {
+      "route": "settings",
+      "width": 768,
+      "title": "Settings & Atmosphere",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "clipped": [],
+      "text": "Settings & Atmosphere\n\nPersonalize your background, active currencies, conversion rates, and data\n\nHow to use Settings & Atmosphere\nEmber Finance OS — Complete "
+    },
+    {
+      "route": "dashboard",
+      "width": 390,
+      "title": "Your money, in focus",
+      "viewport": 390,
+      "scrollWidth": 642,
+      "clipped": [
+        {
+          "tag": "DIV",
+          "class": "",
+          "right": 577
+        },
+        {
+          "tag": "DIV",
+          "class": "ember-glass-static",
+          "right": 577
+        },
+        {
+          "tag": "DIV",
+          "class": "",
+          "right": 552
+        },
+        {
+          "tag": "svg",
+          "class": "lucide lucide-sparkles lucide-stars",
+          "right": 552
+        },
+        {
+          "tag": "path",
+          "class": "",
+          "right": 551
+        },
+        {
+          "tag": "path",
+          "class": "",
+          "right": 551
+        },
+        {
+          "tag": "circle",
+          "class": "",
+          "right": 540
+        },
+        {
+          "tag": "DIV",
+          "class": "",
+          "right": 552
+        }
+      ],
+      "text": "OCTOBER 2026\n\nYour money, in focus\n\nA calm overview of what came in, what went out, and what you're building.\n\nBDT\nUSD\nHow to use Dashboard\nNET WORTH\n\nBDT 290,0"
+    },
+    {
+      "route": "transactions",
+      "width": 390,
+      "title": "Transactions Ledger",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "clipped": [
+        {
+          "tag": "TABLE",
+          "class": "",
+          "right": 749
+        },
+        {
+          "tag": "THEAD",
+          "class": "",
+          "right": 749
+        },
+        {
+          "tag": "TR",
+          "class": "",
+          "right": 749
+        },
+        {
+          "tag": "TH",
+          "class": "",
+          "right": 481
+        },
+        {
+          "tag": "TH",
+          "class": "",
+          "right": 563
+        },
+        {
+          "tag": "TH",
+          "class": "",
+          "right": 655
+        },
+        {
+          "tag": "TH",
+          "class": "",
+          "right": 749
+        },
+        {
+          "tag": "TBODY",
+          "class": "",
+          "right": 749
+        }
+      ],
+      "text": "Transactions Ledger\n\nGranular journal with multi-currency sorting, account filters, and running tallies\n\nAdd Activity\nHow to use Transactions Ledger\nFILTERED IN"
+    },
+    {
+      "route": "accounts",
+      "width": 390,
+      "title": "Accounts & Wallets",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "clipped": [],
+      "text": "Accounts & Wallets\n\nMulti-currency liquidity, FX conversions, and balance tracking\n\nTransfer / Convert\nNew Account\nHow to use Accounts & Wallets\nCONSOLIDATED PO"
+    },
+    {
+      "route": "subscriptions",
+      "width": 390,
+      "title": "Subscriptions & Recurring Load",
+      "viewport": 390,
+      "scrollWidth": 421,
+      "clipped": [
+        {
+          "tag": "BUTTON",
+          "class": "btn btn-sm btn-secondary",
+          "right": 421
+        },
+        {
+          "tag": "svg",
+          "class": "lucide lucide-chevron-down",
+          "right": 406
+        },
+        {
+          "tag": "path",
+          "class": "",
+          "right": 402
+        }
+      ],
+      "text": "Subscriptions & Recurring Load\n\nSaaS licenses, normalized monthly run rates, and renewal audits\n\nAdd Subscription\nHow to use Subscriptions & Recurring Commitmen"
+    },
+    {
+      "route": "budgets",
+      "width": 390,
+      "title": "Monthly Budgets & Pacing",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "clipped": [],
+      "text": "Monthly Budgets & Pacing\n\nLinear pacing algorithms, safe daily allowances, and overspending projections\n\nSet Budget\nHow to use Monthly Budgets & Pacing\nTOTAL AL"
+    },
+    {
+      "route": "goals",
+      "width": 390,
+      "title": "Financial Goals & Sinking Funds",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "clipped": [],
+      "text": "Financial Goals & Sinking Funds\n\nAmortized monthly deposit requirements, milestone tracking, and sinking funds\n\nCreate Goal\nHow to use Financial Goals & Sinking"
+    },
+    {
+      "route": "reports",
+      "width": 390,
+      "title": "Financial Intelligence Reports",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "clipped": [
+        {
+          "tag": "TABLE",
+          "class": "",
+          "right": 465
+        },
+        {
+          "tag": "THEAD",
+          "class": "",
+          "right": 465
+        },
+        {
+          "tag": "TR",
+          "class": "",
+          "right": 465
+        },
+        {
+          "tag": "TH",
+          "class": "",
+          "right": 465
+        },
+        {
+          "tag": "TBODY",
+          "class": "",
+          "right": 465
+        },
+        {
+          "tag": "TR",
+          "class": "",
+          "right": 465
+        },
+        {
+          "tag": "TD",
+          "class": "ember-number",
+          "right": 465
+        },
+        {
+          "tag": "SPAN",
+          "class": "badge badge-pending",
+          "right": 449
+        }
+      ],
+      "text": "Financial Intelligence Reports\n\nMulti-currency cash flow statements, 50/30/20 variance, and FX conversion audits\n\nBDT\nUSD\nExport CSV\nHow to use Financial Intell"
+    },
+    {
+      "route": "coach",
+      "width": 390,
+      "title": "Ember Financial Coach & Scenarios",
+      "viewport": 390,
+      "scrollWidth": 400,
+      "clipped": [
+        {
+          "tag": "DIV",
+          "class": "",
+          "right": 400
+        },
+        {
+          "tag": "BUTTON",
+          "class": "btn btn-sm btn-secondary",
+          "right": 400
+        }
+      ],
+      "text": "Ember Financial Coach & Scenarios\n\nDeterministic rules engine detecting category anomalies, runway scenarios, and savings wins\n\nRe-run Evaluation\nHow to use Fin"
+    },
+    {
+      "route": "settings",
+      "width": 390,
+      "title": "Settings & Atmosphere",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "clipped": [],
+      "text": "Settings & Atmosphere\n\nPersonalize your background, active currencies, conversion rates, and data\n\nHow to use Settings & Atmosphere\nEmber Finance OS — Complete "
+    },
+    {
+      "case": "Cloud pull does not refresh mounted account page",
+      "cloudNameInStorage": "CLOUD PULLED ACCOUNT",
+      "cloudNameVisible": false
+    }
+  ],
+  "errors": [
+    "Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+    "Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+    "Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+    "Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+    "Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+    "Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+  ],
+  "requests": [
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "POST"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "POST"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "POST"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/ai/coach",
+      "method": "POST"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "POST"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/ai/coach",
+      "method": "POST"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "POST"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/ai/coach",
+      "method": "POST"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    },
+    {
+      "path": "/api/db",
+      "method": "POST"
+    },
+    {
+      "path": "/api/db",
+      "method": "GET"
+    }
+  ]
+}

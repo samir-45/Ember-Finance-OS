@@ -1,21 +1,27 @@
 'use client';
 
-import { ReactNode, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Sidebar } from './Sidebar';
-import { MobileNav } from './MobileNav';
-import { Header } from './Header';
-import { seedData } from '@/data/seed';
+import { store } from '@/lib/store';
+import { localDate } from '@/lib/dates';
 import { pullFromCloud } from '@/lib/sync';
+import { useLedgerVersion } from '@/lib/use-ledger';
+import { useRouter } from 'next/navigation';
+import { ReactNode, useEffect, useState } from 'react';
+import { Header } from './Header';
+import { MobileNav } from './MobileNav';
+import { Sidebar } from './Sidebar';
 
 export function AppShell({ children }: { children: ReactNode }) {
+  useLedgerVersion();
   const [mobileOpen, setMobileOpen] = useState(false);
   const router = useRouter();
+  const ledger = store.getSnapshot();
+  const futurePostings = [...ledger.transactions, ...ledger.transfers].filter(
+    (entry) => (entry.status ?? 'done') === 'done' && entry.date > localDate(),
+  ).length;
 
-  // Initialize seed data on first client visit and pull latest cloud records
+  // Pull only for an explicitly connected personal workspace.
   useEffect(() => {
-    seedData();
-    pullFromCloud();
+    if (store.getLocalState().mode === 'cloud') void pullFromCloud();
   }, []);
 
   // Global Keyboard shortcut: N to quick add activity
@@ -24,7 +30,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       const target = e.target as HTMLElement;
       if (
         (e.key === 'n' || e.key === 'N') &&
-        !e.metaKey && !e.ctrlKey && !e.altKey &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
         !target.isContentEditable &&
         !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
       ) {
@@ -38,6 +46,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div
+      className={store.getSettings().compactMode ? 'compact' : ''}
       style={{
         position: 'relative',
         zIndex: 1,
@@ -55,7 +64,17 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Main Content Area */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <Header onOpenMobileNav={() => setMobileOpen(true)} />
-        <main style={{ padding: '28px 36px', width: '100%', flex: 1 }}>
+        <main id="workspace-content" className="workspace-main" style={{ width: '100%', flex: 1 }}>
+          {futurePostings > 0 && (
+            <aside className="ember-glass settings-card" role="status" style={{ marginBottom: 24 }}>
+              {futurePostings} future-dated {futurePostings === 1 ? 'record is' : 'records are'}{' '}
+              marked done. Original dates and statuses are preserved. These entries are excluded
+              from balances and spending until their dates. Review them in{' '}
+              <a href="/transactions">Transactions</a> or{' '}
+              <a href="/accounts">Accounts &amp; transfers</a> to correct their dates or mark them
+              pending.
+            </aside>
+          )}
           {children}
         </main>
       </div>

@@ -2,16 +2,28 @@
 
 import { motion } from 'framer-motion';
 
-export function HealthRing({ score }: { score: number }) {
+export function HealthRing({ score, available = true }: { score: number; available?: boolean }) {
   const radius = 44;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
-  const color = score >= 75 ? 'var(--color-income)' : score >= 50 ? 'var(--color-warning)' : 'var(--color-expense)';
+  const color =
+    score >= 75
+      ? 'var(--color-income)'
+      : score >= 50
+        ? 'var(--color-warning)'
+        : 'var(--color-expense)';
 
   return (
     <div style={{ position: 'relative', width: 100, height: 100 }}>
       <svg width="100" height="100" viewBox="0 0 100 100">
-        <circle cx="50" cy="50" r={radius} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" />
+        <circle
+          cx="50"
+          cy="50"
+          r={radius}
+          fill="none"
+          stroke="rgba(255,255,255,0.06)"
+          strokeWidth="6"
+        />
         <motion.circle
           cx="50"
           cy="50"
@@ -38,7 +50,7 @@ export function HealthRing({ score }: { score: number }) {
         }}
       >
         <span style={{ fontSize: '1.5rem', fontWeight: 300, color }} className="ember-number">
-          {score}
+          {available ? score : '—'}
         </span>
         <span
           style={{

@@ -1,237 +1,406 @@
 'use client';
-
-import { useState } from 'react';
-import { Download, RefreshCw, Trash2, AlertTriangle, Cloud, CheckCircle2 } from 'lucide-react';
-import { store } from '@/lib/store';
 import { seedData } from '@/data/seed';
-import { syncNow, useSyncStatus } from '@/lib/sync';
-
+import { localDate } from '@/lib/dates';
+import { downloadFile } from '@/lib/finance';
+import { normalizeLedger } from '@/lib/ledger';
+import { store } from '@/lib/store';
+import {
+  getConflictCopy,
+  pullFromCloud,
+  resolveConflict,
+  syncNow,
+  useSyncStatus,
+} from '@/lib/sync';
+import type { LedgerSnapshot } from '@/types';
+import { useEffect, useState } from 'react';
 export function DataManagement() {
   const sync = useSyncStatus();
-  const [resetConfirm, setResetConfirm] = useState(false);
-  const [seedConfirm, setSeedConfirm] = useState(false);
-  const [seededToast, setSeededToast] = useState(false);
-  const [manualSyncing, setManualSyncing] = useState(false);
-
-  // Manual Trigger for Force Cloud Re-sync
-  const handleForceSync = async () => {
-    setManualSyncing(true);
-    await syncNow();
-    setManualSyncing(false);
-  };
-
-  // Export JSON Backup
-  const handleExportBackup = () => {
-    const backup = {
-      version: '1.0',
-      exportedAt: new Date().toISOString(),
-      accounts: store.getAccounts(),
-      categories: store.getCategories(),
-      transactions: store.getTransactions(),
-      subscriptions: store.getSubscriptions(),
-      budgets: store.getBudgets(),
-      goals: store.getGoals(),
-      transfers: store.getTransfers(),
-      exchangeRates: store.getExchangeRates(),
-      settings: store.getSettings(),
-    };
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ember_finance_backup_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Re-seed Data
-  const handleReSeed = () => {
-    seedData();
-    setSeedConfirm(false);
-    setSeededToast(true);
-    syncNow(); // Push freshly seeded data to Neon
-    setTimeout(() => {
-      setSeededToast(false);
-      window.location.reload();
-    }, 1200);
-  };
-
-  // Reset All Data
-  const handleFactoryReset = async () => {
-    store.resetAll();
+  const [authenticated, setAuthenticated] = useState(false);
+  const [configured, setConfigured] = useState(false);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<LedgerSnapshot | null>(null);
+  const [remote, setRemote] = useState<{ data: LedgerSnapshot; revision: number } | null>(null);
+  useEffect(() => {
+    fetch('/api/auth/session')
+      .then((r) => r.json())
+      .then((s) => {
+        setAuthenticated(s.authenticated);
+        setConfigured(s.configured);
+      })
+      .catch(() =>
+        setError('Server sign-in is unavailable. Browser records are still accessible.'),
+      );
+  }, []);
+  const action = async (fn: () => void | Promise<void>) => {
+    setBusy(true);
+    setError('');
+    setMessage('');
     try {
-      await fetch('/api/db', { method: 'DELETE' });
-    } catch (err) {
-      console.warn('Failed cloud wipe:', err);
+      await fn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The operation failed');
+    } finally {
+      setBusy(false);
     }
-    window.location.reload();
   };
-
+  const exportBackup = () =>
+    downloadFile(
+      JSON.stringify({ ...store.getSnapshot(), exportedAt: new Date().toISOString() }, null, 2),
+      `ember-backup-${localDate()}.json`,
+      'application/json',
+    );
+  const connect = () =>
+    action(async () => {
+      const res = await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error);
+      setAuthenticated(true);
+      setPassword('');
+      store.setMode('cloud');
+      await pullFromCloud();
+    });
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* ── 1. Data Portability & Offline Backup ── */}
-      <div className="ember-glass" style={{ padding: '28px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 8 }}>
-          <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Data Portability & Offline Backup</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            {sync.lastSyncedAt && (
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Synced {sync.lastSyncedAt}
-              </span>
-            )}
-            <span
-              style={{
-                fontSize: '0.75rem',
-                padding: '4px 10px',
-                borderRadius: 'var(--radius-full)',
-                background: sync.state === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(110, 231, 168, 0.1)',
-                color: sync.state === 'error' ? 'var(--color-critical)' : 'var(--color-income)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
+    <div className="settings-stack">
+      <section className="ember-glass settings-card settings-stack">
+        <h2>Storage & owner access</h2>
+        <p>
+          Records are stored as plain JSON in this browser. Browser-only mode makes no automatic
+          financial uploads. Owner sign-in enables your configured server vault. Protect this device
+          and keep independent backups.
+        </p>
+        <p role="status">
+          {store.getLocalState().mode === 'demo'
+            ? 'Demo workspace'
+            : store.getLocalState().mode === 'browser'
+              ? 'Browser only'
+              : `Server storage: ${sync.provider ?? 'not connected'}`}{' '}
+          · {sync.state}
+          {sync.lastSyncedAt ? ` · Saved ${new Date(sync.lastSyncedAt).toLocaleString()}` : ''}
+        </p>
+        {sync.error && (
+          <p className="form-error" role="alert">
+            {sync.error}
+          </p>
+        )}
+        {!authenticated ? (
+          configured ? (
+            <form
+              className="form-stack"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void connect();
               }}
             >
-              {sync.state === 'syncing' ? (
-                <>
-                  <RefreshCw size={12} className="animate-spin" />
-                  Syncing to Neon...
-                </>
-              ) : sync.state === 'error' ? (
-                <>
-                  <AlertTriangle size={12} />
-                  Sync Warning
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 size={13} />
-                  Auto-Sync to Neon Active
-                </>
-              )}
-            </span>
-          </div>
-        </div>
-        <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: 20 }}>
-          Your financial records are automatically persisted in real time to your Neon PostgreSQL cloud database. You can download an offline JSON archive anytime for personal backups or tax filing.
-        </p>
-
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-          {/* Export JSON File */}
-          <button onClick={handleExportBackup} className="btn btn-primary btn-sm">
-            <Download size={15} />
-            Export JSON Archive
-          </button>
-
-          {/* Force Cloud Re-sync */}
-          <button
-            onClick={handleForceSync}
-            disabled={manualSyncing || sync.state === 'syncing'}
-            className="btn btn-secondary btn-sm"
-          >
-            <RefreshCw size={15} className={manualSyncing ? 'animate-spin' : ''} />
-            <span>{manualSyncing ? 'Syncing...' : 'Force Cloud Re-sync'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* ── 2. Danger Zone (Demo Data & Factory Reset) ── */}
-      <div
-        className="ember-glass"
-        style={{
-          padding: '28px',
-          borderLeft: '4px solid var(--color-critical)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <span style={{ color: 'var(--color-critical)' }}>
-            <AlertTriangle size={18} />
-          </span>
-          <h2 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--color-critical)' }}>
-            Danger Zone
-          </h2>
-        </div>
-        <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 20 }}>
-          Destructive operations and demo tools. Proceed with caution when managing live financial data.
-        </p>
-
-        {seededToast && (
-          <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, background: 'rgba(110, 231, 168, 0.1)', color: 'var(--color-income)', fontSize: '0.8125rem' }}>
-            Sample freelancer records populated! Refreshing workspace...
+              <label htmlFor="owner-password">
+                Owner password
+                <input
+                  id="owner-password"
+                  className="input"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </label>
+              <button className="btn btn-primary" disabled={busy}>
+                Sign in & connect server storage
+              </button>
+            </form>
+          ) : (
+            <p>
+              Server access is disabled until the deployment owner configures a strong owner
+              password. Browser-only use is available.
+            </p>
+          )
+        ) : (
+          <div className="action-row">
+            <button
+              className="btn btn-primary"
+              disabled={busy}
+              onClick={() =>
+                void action(async () => {
+                  store.setMode('cloud');
+                  await pullFromCloud();
+                })
+              }
+            >
+              Load server copy
+            </button>
+            <button
+              className="btn btn-secondary"
+              disabled={busy}
+              onClick={() =>
+                void action(async () => {
+                  if (!(await syncNow()))
+                    throw new Error('Sync did not complete. Review the status above.');
+                })
+              }
+            >
+              Save pending changes
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() =>
+                void action(async () => {
+                  if (
+                    store.getLocalState().dirty &&
+                    store.getLocalState().mode === 'cloud' &&
+                    !confirm('There are unsynced changes. Keep them in this browser and sign out?')
+                  )
+                    return;
+                  await fetch('/api/auth/session', { method: 'DELETE' });
+                  store.setMode('browser');
+                  setAuthenticated(false);
+                  setMessage('Signed out. This browser still contains your local records.');
+                })
+              }
+            >
+              Sign out
+            </button>
           </div>
         )}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Seed Sample Demo Data */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, paddingBottom: 16, borderBottom: '1px solid var(--border-subtle)' }}>
-            <div>
-              <p style={{ fontSize: '0.875rem', fontWeight: 500 }}>Populate Sample Freelancer Data</p>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Replaces current records with 6 months of sample multi-currency freelancer data for demonstration.
+        <button
+          className="btn btn-secondary"
+          onClick={() => {
+            store.setMode('browser');
+            setMessage('Automatic cloud sync paused. Records remain in this browser.');
+          }}
+        >
+          Use browser only
+        </button>
+      </section>
+      {(sync.state === 'conflict' || remote) && (
+        <section className="ember-glass settings-card settings-stack">
+          <h2>Review the conflicting copies</h2>
+          <p>Neither copy has been overwritten. Download both before selecting the copy to keep.</p>
+          <div className="action-row">
+            <button className="btn btn-secondary" onClick={exportBackup}>
+              Download browser copy
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() =>
+                void action(async () => {
+                  const copy = await getConflictCopy();
+                  setRemote(copy);
+                  downloadFile(
+                    JSON.stringify(copy.data, null, 2),
+                    `ember-server-revision-${copy.revision}.json`,
+                    'application/json',
+                  );
+                })
+              }
+            >
+              Review & download server copy
+            </button>
+          </div>
+          {remote && (
+            <>
+              <p>
+                Server revision {remote.revision}: {remote.data.accounts.length} accounts,{' '}
+                {remote.data.transactions.length} transactions, {remote.data.transfers.length}{' '}
+                transfers. Browser: {store.getAccounts().length} accounts,{' '}
+                {store.getTransactions().length} transactions.
               </p>
-            </div>
-            {!seedConfirm ? (
-              <button
-                onClick={() => setSeedConfirm(true)}
-                className="btn btn-secondary btn-sm"
-              >
-                Seed Demo Data
-              </button>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-warning)' }}>Overwrite records?</span>
+              <div className="action-row">
                 <button
-                  onClick={handleReSeed}
-                  className="btn btn-sm"
-                  style={{ background: 'var(--color-warning)', color: '#000', fontWeight: 600 }}
+                  className="btn btn-secondary"
+                  onClick={() =>
+                    void action(async () => {
+                      if (
+                        confirm(
+                          'Replace the browser ledger with the reviewed server copy? A local recovery copy is retained.',
+                        )
+                      ) {
+                        await resolveConflict('server');
+                        setRemote(null);
+                      }
+                    })
+                  }
                 >
-                  Confirm Seed
+                  Keep server copy
                 </button>
-                <button onClick={() => setSeedConfirm(false)} className="btn btn-secondary btn-sm">
-                  Cancel
+                <button
+                  className="btn btn-danger"
+                  onClick={() =>
+                    void action(async () => {
+                      if (
+                        confirm(
+                          'Replace the current server ledger with this browser copy? The previous server revision is retained.',
+                        )
+                      ) {
+                        if (!(await resolveConflict('browser')))
+                          throw new Error('Server changed again; review the latest copy.');
+                        setRemote(null);
+                      }
+                    })
+                  }
+                >
+                  Keep browser copy on server
                 </button>
               </div>
-            )}
-          </div>
-
-          {/* Factory Reset */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-            <div>
-              <p style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-critical)' }}>Wipe All Records & Clean Reset</p>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Permanently wipes all accounts, transactions, and budgets from both local storage and Neon PostgreSQL.
-              </p>
-            </div>
-            {!resetConfirm ? (
-              <button
-                onClick={() => setResetConfirm(true)}
-                className="btn btn-sm"
-                style={{
-                  background: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  color: 'var(--color-critical)',
-                  gap: 6,
-                }}
-              >
-                <Trash2 size={14} />
-                Reset Ledger
-              </button>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-critical)' }}>Permanently erase all data?</span>
-                <button
-                  onClick={handleFactoryReset}
-                  className="btn btn-sm"
-                  style={{ background: 'var(--color-critical)', color: '#fff', fontWeight: 600 }}
-                >
-                  Yes, Erase Everything
-                </button>
-                <button onClick={() => setResetConfirm(false)} className="btn btn-secondary btn-sm">
-                  Cancel
-                </button>
-              </div>
-            )}
-          </div>
+            </>
+          )}
+        </section>
+      )}
+      <section className="ember-glass settings-card settings-stack">
+        <h2>Backup & restore</h2>
+        <p>
+          JSON archives contain the complete ledger, allocations, reconciliations, and preferences.
+          Export before moving devices or changing storage. Backups contain private financial
+          information.
+        </p>
+        <div className="action-row">
+          <button className="btn btn-primary" onClick={exportBackup}>
+            Export JSON backup
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              const raw = localStorage.getItem('ember_recovery_v2');
+              if (!raw) {
+                setError('No previous recovery copy exists yet');
+                return;
+              }
+              const data = JSON.parse(raw);
+              downloadFile(
+                JSON.stringify(data.ledger, null, 2),
+                'ember-previous-recovery.json',
+                'application/json',
+              );
+            }}
+          >
+            Download previous recovery copy
+          </button>
         </div>
-      </div>
+        <label htmlFor="restore-file">
+          Preview a JSON archive
+          <input
+            id="restore-file"
+            type="file"
+            accept="application/json,.json"
+            onChange={(e) =>
+              void action(async () => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setPreview(null);
+                if (file.size > 10485760) throw new Error('Archive must be smaller than 10 MB');
+                setPreview(normalizeLedger(JSON.parse(await file.text())));
+              })
+            }
+          />
+        </label>
+        {preview && (
+          <div className="form-stack">
+            <p>
+              Validated archive: {preview.accounts.length} accounts, {preview.transactions.length}{' '}
+              transactions, {preview.transfers.length} transfers, {preview.goals.length} goals.
+              Restore replaces this browser ledger and queues a cloud save only if connected.
+            </p>
+            <button
+              className="btn btn-danger"
+              disabled={busy}
+              onClick={() =>
+                void action(() => {
+                  if (
+                    !confirm(
+                      'Replace the active browser ledger with this archive? A recovery copy will be saved first.',
+                    )
+                  )
+                    return;
+                  store.importAll(preview);
+                  setPreview(null);
+                  setMessage('Archive restored. Review account balances before continuing.');
+                })
+              }
+            >
+              Restore this archive
+            </button>
+          </div>
+        )}
+      </section>
+      <section className="ember-glass settings-card settings-stack">
+        <h2>Start fresh or explore a demo</h2>
+        <p>
+          Reset creates an empty ledger and retains a recovery copy. Connected server storage
+          receives the reset through a revision-checked save; server history is retained.
+        </p>
+        <div className="action-row">
+          <button
+            className="btn btn-danger"
+            disabled={busy}
+            onClick={() =>
+              void action(async () => {
+                if (!confirm('Export a backup first. Reset the active ledger to empty?')) return;
+                store.resetAll();
+                if (store.getLocalState().mode === 'cloud' && !(await syncNow()))
+                  throw new Error(
+                    'Browser reset saved; server reset is still pending. Keep this tab open and review sync status.',
+                  );
+                setMessage('Active ledger reset. No demo records were added.');
+              })
+            }
+          >
+            Reset active ledger
+          </button>
+          <button
+            className="btn btn-secondary"
+            disabled={busy}
+            onClick={() =>
+              void action(() => {
+                if (
+                  !confirm(
+                    'Switch to an isolated demo? Your current workspace will be retained for returning later.',
+                  )
+                )
+                  return;
+                const current = localStorage.getItem('ember_ledger_v2');
+                if (current && store.getLocalState().mode !== 'demo')
+                  localStorage.setItem('ember_personal_workspace', current);
+                store.setMode('demo');
+                store.resetAll();
+                seedData();
+                setMessage('Demo loaded. Server sync is disabled.');
+              })
+            }
+          >
+            Open demo workspace
+          </button>
+          {store.getLocalState().mode === 'demo' && (
+            <button
+              className="btn btn-primary"
+              onClick={() =>
+                void action(() => {
+                  const raw = localStorage.getItem('ember_personal_workspace');
+                  if (!raw) throw new Error('No saved personal workspace');
+                  localStorage.setItem('ember_ledger_v2', raw);
+                  window.location.reload();
+                })
+              }
+            >
+              Return to personal workspace
+            </button>
+          )}
+        </div>
+      </section>
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+      {message && (
+        <p className="form-success" role="status">
+          {message}
+        </p>
+      )}
     </div>
   );
 }

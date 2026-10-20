@@ -2,6 +2,7 @@
 
 # compiled output
 .next
+.next-e2e/
 dist
 tmp
 out-tsc
@@ -54,3 +55,7 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+playwright-report/
+test-results/
+artifacts/verification/
+*.recovery.json

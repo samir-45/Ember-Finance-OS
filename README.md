@@ -1,202 +1,88 @@
-# 🔥 Ember — Personal Finance OS
+# Ember — Personal Finance
 
-<p align="center">
-  <img src="public/TudSa.webp" alt="Ember Finance OS Backdrop" width="100%" style="border-radius: 16px; max-height: 400px; object-fit: cover;" />
-</p>
+A single-owner workspace for USD client earnings, actual BDT conversions, local spending, bills, giving, and funded savings goals.
 
-<p align="center">
-  <strong>A calm, private, multi-currency personal finance OS for international freelancers, remote builders, and creators.</strong>
-</p>
+## Run locally
 
-<p align="center">
-  <a href="#features">Features</a> •
-  <a href="#tech-stack">Tech Stack</a> •
-  <a href="#architecture">Architecture</a> •
-  <a href="#getting-started">Getting Started</a> •
-  <a href="#dynamic-atmosphere">Atmosphere & Presets</a> •
-  <a href="#license">License</a>
-</p>
+Use Node 24 LTS (`.nvmrc`), then:
 
----
-
-## ✨ Overview
-
-**Ember Finance OS** is built for individuals who earn in foreign currencies (e.g. **USD** via Payoneer, PayPal, Upwork, Stripe) and live/spend in local currencies (e.g. **BDT** via local banks, bKash, cash).
-
-Instead of complicated spreadsheets or bloated SaaS tools, Ember combines Apple visionOS-inspired glassmorphism with an ambient living ember glow, local-first privacy, and a deterministic financial rules engine.
-
----
-
-## 🚀 Key Features
-
-### 📊 1. Overview & Dashboard
-- **Consolidated Net Worth & Runway**: Real-time unified portfolio value with runway estimation based on actual monthly burn rate.
-- **Cash Flow Area Chart**: Interactive 6-month income vs. expense visualizer powered by Recharts.
-- **Category Donut Breakdown**: Spending distribution with proportional progress indicators and drill-down links.
-- **Money Health Score Ring**: Circular 0–100 gauge assessing your savings rate, budget adherence, subscription load, and emergency reserves.
-
-### 💳 2. Multi-Currency Ledger & Transactions
-- **Unified Ledger**: Track USD income, BDT living expenses, and cross-currency transfers.
-- **Instant Search & Filters**: Search across merchants, notes, and categories with tabbed transaction type filtering.
-- **Quick-Entry Modal**: Press <kbd>N</kbd> anywhere in the application to immediately open the activity logger.
-
-### 🏦 3. Accounts & Wallets
-- Native support for **Payoneer**, **PayPal**, **Bank accounts (e.g., DBBL)**, **Mobile wallets (e.g., bKash)**, and **Cash**.
-- Live conversions based on your configured reference exchange rate.
-
-### 🔁 4. Subscriptions & Fixed Commitments
-- Track SaaS licenses (ChatGPT Plus, GitHub Copilot, Figma), streaming services, and domain renewals.
-- One-click active/paused toggling and automatic monthly subscription load calculations.
-
-### 🎯 5. Monthly Budgets & Guardrails
-- Category-level spending guardrails with color-coded meters (green, warning amber at 80%, critical crimson at 100%+).
-- Prevents lifestyle creep and ensures savings targets are preserved.
-
-### 🏁 6. Financial Goals & Milestones
-- Track emergency fund runways, new hardware purchases (MacBook Pro), and personal milestones.
-- Quick-contribution buttons to record incremental progress toward targets.
-
-### 🧠 7. Ember Coach (Deterministic Rules Engine)
-- **50/30/20 Savings Rule**: Evaluates whether your monthly savings rate meets or exceeds the 20% benchmark.
-- **Category Spike Detection**: Flags when category spending jumps more than 30% above your 3-month rolling average.
-- **Emergency Runway Meter**: Checks if available liquidity covers 3 to 6 months of living expenses.
-- **Fee Drag & Conversion Analysis**: Identifies exchange fees and alerts on below-average currency conversion timing.
-
-### 📈 8. Reports & Data Portability
-- Export your complete transaction ledger as clean **CSV** for tax or accounting purposes.
-- Full **JSON backup & restore** to keep your records 100% private and portable.
-
----
-
-## 🎨 Dynamic Atmosphere & Background Presets
-
-Ember includes an ambient visual engine customizable right from the **Settings** page:
-
-| Preset | Description |
-| :--- | :--- |
-| **Molten Ember (TudSa)** | Custom radiant fluted flame curtain (*Default*) |
-| **Tactile Roaring Fire** | Living animated flames with analog film grain & velvet vignette |
-| **Subtle Obsidian Hearth** | Minimal obsidian canvas with radial ember gradient mesh |
-| **Living Plasma Fire** | Procedural morphing organic fire plumes |
-| **Cosmic Stardust** | Deep cosmic space with drifting stellar dust |
-| **Custom Photo Upload** | Upload your own high-resolution image with automatic client-side compression |
-
-Includes real-time controls for **Brightness**, **Soft Blur**, and a toggleable **Drifting Ember Sparks** particle canvas.
-
----
-
-## 🛠️ Tech Stack
-
-- **Framework**: [Next.js 16 (App Router)](https://nextjs.org/) with Turbopack
-- **Runtime**: [React 19](https://react.dev/)
-- **Language**: [TypeScript 5](https://www.typescriptlang.org/)
-- **Animations**: [Framer Motion](https://www.framer.com/motion/)
-- **Charts**: [Recharts](https://recharts.org/)
-- **Icons**: [Lucide React](https://lucide.dev/)
-- **Styling**: Vanilla CSS Design System with dark glassmorphism & CSS custom properties
-- **Data Persistence**: Local-First Store with SSR hydration safety & 6-month sample seed generator
-
----
-
-## 📁 Project Architecture
-
-The codebase follows a modular structure without bloated single-file components:
-
-```
-d:\Projects\Ember-Finance-OS\
-├── public/
-│   └── TudSa.webp                         # High-res ember backdrop image
-├── src/
-│   ├── app/                               # Next.js App Router routes
-│   │   ├── globals.css                    # VisionOS glass styling & tokens
-│   │   ├── layout.tsx                     # Root layout with shell & atmosphere
-│   │   ├── page.tsx                       # Redirects to /dashboard
-│   │   ├── dashboard/page.tsx             # Composed modular dashboard
-│   │   ├── transactions/page.tsx          # Ledger, search & quick-entry modal
-│   │   ├── accounts/page.tsx              # Multi-currency balances
-│   │   ├── subscriptions/page.tsx         # Recurring services & monthly burn
-│   │   ├── budgets/page.tsx               # Spending limit meters
-│   │   ├── goals/page.tsx                 # Targets & progress
-│   │   ├── reports/page.tsx               # Historical cash flow & CSV exports
-│   │   ├── coach/page.tsx                 # Deterministic financial rules engine
-│   │   └── settings/page.tsx              # Backgrounds, currency, & backups
-│   ├── components/
-│   │   ├── background/                    # Atmosphere switcher & particle canvas
-│   │   ├── dashboard/                     # Modular KPI, charts & widget cards
-│   │   ├── layout/                        # AppShell, Sidebar, Header, MobileNav
-│   │   ├── settings/                      # Customizer, Currency, & Data widgets
-│   │   └── ui/                            # Reusable tickers & empty states
-│   ├── data/
-│   │   └── seed.ts                        # 6-month realistic freelancer data
-│   ├── lib/
-│   │   ├── background.ts                  # Atmosphere config & event emitter
-│   │   ├── finance.ts                     # Conversion math, balances & CSV
-│   │   ├── rules-engine.ts                # Deterministic rules evaluator
-│   │   └── store.ts                       # SSR-safe local-first store
-│   └── types/
-│       └── index.ts                       # Strict TypeScript interfaces
-├── next.config.ts                         # Next.js configuration
-├── package.json                           # Dependencies & scripts
-└── tsconfig.json                          # Path aliases (@/*)
+```sh
+npm ci
+npm run dev
 ```
 
----
+Open `http://localhost:3000`. Browser-only mode works without server credentials. It starts with empty accounts and standard categories; sample data is available only in the isolated demo workspace in Settings.
 
-## 💻 Getting Started
+## Your daily workflow
 
-### Prerequisites
+1. Add NSave in USD and your real bank/wallet/cash accounts in BDT. Enter opening balances for the point where tracking begins.
+2. Record a client payment in its account currency. Use planned/pending status until funds settle.
+3. Reserve existing money in **Allocations & giving**. A personal income percentage can suggest a reserve; zakat and sadaqah remain separate records.
+4. In **Accounts**, record actual transfer principal sent/received and any additional fee. Review the resulting debit/credit before saving. Pending transfers do not alter balances.
+5. Enter local expenses in BDT. Record bill renewals once per billing period.
+6. Link savings goals to accounts holding their funds. Reservations do not create money or change net worth.
+7. Reconcile current account balances against statements and export regular backups.
 
-- **Node.js**: `v20.17.0` or `>=22.9.0` (LTS recommended)
-- **npm**: `v10+` or `v11+`
+## Storage and privacy
 
-### Installation
+- Browser records and JSON exports are readable financial data; application-level encryption is not implemented.
+- Browser-only and demo modes make no automatic financial uploads.
+- Server synchronization requires the owner password and an HTTP-only session cookie. Every ledger and AI handler verifies authorization and request origin.
+- A server save replaces one complete, validated ledger atomically, using an expected revision. Previous server revisions are retained. Concurrent edits cause a visible conflict instead of silent replacement.
+- Browser saves use one atomic localStorage snapshot. A single active editing tab is enforced with Web Locks. Use HTTPS or localhost and a browser supporting Web Locks.
+- Dirty offline changes are preserved on reconnect. Settings provides explicit conflict review and downloads for both copies.
+- PostgreSQL errors do not silently fall back to files. A file vault must be explicitly configured on durable storage.
+- External AI is disabled by default. Requests require owner sign-in, the server allow switch, both privacy preferences, and an explicit user action. Entry text and financial summaries may be sent to Google when enabled.
+- Demo data cannot switch directly into cloud mode. Return to the saved personal workspace first.
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/samir-45/Ember-Finance-OS.git
-   cd Ember-Finance-OS
-   ```
+## Optional server configuration
 
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
+Copy `.env.example` to your environment configuration; retain any existing credentials. Set a unique random `EMBER_OWNER_PASSWORD` of at least 16 characters, a random `EMBER_SESSION_SECRET`, and the canonical `EMBER_PUBLIC_URL`.
 
-3. **Start the local development server**:
-   ```bash
-   npm run dev
-   ```
+For PostgreSQL, configure `DATABASE_URL` and apply the additive migration:
 
-4. **Open in your browser**:
-   Navigate to [http://localhost:3000](http://localhost:3000) (or `http://localhost:3001` if port 3000 is occupied).
+```sh
+npm run db:migrate
+```
 
-### Building for Production
+The migration creates `ledger_snapshots` and `ledger_history`; it does not rewrite legacy tables. The PostgreSQL driver verifies remote TLS certificates. A local loopback test database can use a non-TLS connection. See [production and migration instructions](docs/PRODUCTION.md) before connecting an existing database.
 
-To create an optimized production build with Turbopack:
+Alternatively, on a persistent single Node host, configure `EMBER_STORAGE_DRIVER=file` and an absolute `EMBER_VAULT_PATH` on a private durable volume. Do not put it in `public`, on ephemeral function storage, or in a deployment directory that is replaced on release. File revisions use exclusive locks and atomic replacement. File storage is not a fallback for PostgreSQL.
 
-```bash
+Then sign in from Settings. Existing local and server copies are preserved when they conflict; inspect and download both before selecting a replacement.
+
+## Recovery
+
+Settings exports a complete versioned JSON ledger, previews and validates imports, and saves a pre-restore recovery copy. Restore replaces the active browser ledger; a connected server save still requires its current revision. “Reset active ledger” creates an empty current snapshot and retains prior recovery/history copies. It is not a secure erasure of all historical backups.
+
+Legacy browser keys remain untouched during migration. Invalid currencies/references stop migration with a recovery download rather than silently changing amounts. Legacy budgets with no calendar month remain `unassigned` until you assign a month in Budgets. Legacy transactions without an FX reporting rate use the reference rate present at import; verify it against original records if historical precision matters.
+
+CSV export includes income, expenses, both transfer legs, fees, original currencies, IDs, status, and reporting rate. Text fields escape quotes and protect against spreadsheet formula interpretation. JSON is the complete recovery format.
+
+## Financial definitions
+
+- **Balance:** opening balance plus settled income, minus settled expenses, plus/minus settled transfer principal and the fee in its actual currency.
+- **Future dates:** new future-dated entries must be planned or pending. Existing archives containing future-dated entries marked done still open; their original records are preserved and a review notice is shown. Those entries do not affect balances, budgets, or spending before their dates.
+- **Local available to spend:** BDT balances minus funded goal/earmarked reservations and uncovered upcoming bill amounts. It can be negative when accounts are overcommitted.
+- **Historical cash flow:** posted reporting rates remain stable when today's portfolio reference rate changes. Transfer principal is excluded; fees appear once in expenses.
+- **Runway:** liquid balances after earmarked obligations divided by average expenses over up to three complete calendar months. A complete expense month is required; missing history does not produce an optimistic score.
+- **Recurring costs:** yearly ÷ 12, quarterly ÷ 3, weekly × 52 ÷ 12. All local insights use the shared normalization helper.
+- **Budgets:** one limit per category/month; parent limits include descendants. Summaries avoid counting nested limits twice. Pacing is an estimate for variable spending, not a fixed-bill payment schedule.
+- **Giving:** reserves and actual payments are distinct. The app records user-determined zakat amounts; an income percentage is not a zakat calculation.
+
+## Verification
+
+```sh
+npm run lint
+npm test
 npm run build
-npm run start
+npx playwright install chromium
+npm run test:browser
+npm audit
 ```
 
----
+`lint` runs ESLint and strict TypeScript. Tests cover money, calendar boundaries, transfers/fees, recurrence/idempotency, reservations, restore, auth, and revision conflicts. Browser tests use synthetic records and isolated server storage. To use an existing Chromium binary locally, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
 
-## ⌨️ Keyboard Shortcuts
+Set `TEST_DATABASE_URL` to a **disposable** PostgreSQL database with `test` in its name to run the database integration test. It never uses the normal `DATABASE_URL`. CI supplies a PostgreSQL service and runs the migration, persistence, browser, and dependency checks.
 
-| Key | Action |
-| :--- | :--- |
-| <kbd>N</kbd> | Open **Add Activity** modal from anywhere |
-
----
-
-## 🔒 Privacy & Local-First Philosophy
-
-- **No Remote Telemetry**: Your financial figures, balances, and notes remain strictly in your browser's local storage.
-- **Safe Secrets**: Environment variables (`.env`) are strictly ignored by `.gitignore` to prevent secret leaks.
-- **Full Data Ownership**: Export your data at any time in standard JSON or CSV formats.
-
----
-
-## 📄 License
-
-This project is open-source under the [MIT License](LICENSE).
+Production deployment, real bank reconciliation, provider backup retention, and external AI provider behavior require verification in the deployment environment. See [remediation status](docs/REMEDIATION.md) for the audit-to-fix mapping.

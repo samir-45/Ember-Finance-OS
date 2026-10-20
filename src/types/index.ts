@@ -19,6 +19,9 @@ export interface Account {
   openingBalanceMinor: number;
   color: string;
   createdAt: string;
+  archived?: boolean;
+  reconciledAt?: string;
+  reconciledBalanceMinor?: number;
 }
 
 export interface Category {
@@ -28,6 +31,7 @@ export interface Category {
   type: 'income' | 'expense';
   color: string;
   icon: string;
+  budgetGroup?: 'needs' | 'wants' | 'savings' | 'giving';
 }
 
 export interface Transaction {
@@ -45,6 +49,11 @@ export interface Transaction {
   paymentMethod: string;
   status: TransactionStatus;
   createdAt: string;
+  reportingRate?: number;
+  subscriptionId?: string;
+  billingPeriod?: string;
+  givingKind?: 'zakat' | 'sadaqah';
+  allocationId?: string;
 }
 
 export interface Transfer {
@@ -58,6 +67,9 @@ export interface Transfer {
   feeCurrency: Currency;
   date: string;
   createdAt: string;
+  status?: TransactionStatus;
+  note?: string;
+  reportingRate?: number;
 }
 
 export interface Subscription {
@@ -71,6 +83,7 @@ export interface Subscription {
   accountId: string | null;
   active: boolean;
   createdAt: string;
+  anchorDay?: number;
 }
 
 export interface Budget {
@@ -89,6 +102,8 @@ export interface Goal {
   currency: Currency;
   deadline: string | null;
   createdAt: string;
+  accountId?: string | null;
+  isEmergency?: boolean;
 }
 
 export interface ExchangeRate {
@@ -116,6 +131,44 @@ export interface UserSettings {
   aiCoachEnabled: boolean;
   shareAiDetails: boolean;
   compactMode: boolean;
+  givingPercent?: number;
+  savingsTargetPercent?: number;
+  subscriptionLimitPercent?: number;
+}
+
+export interface Allocation {
+  id: string;
+  accountId: string;
+  name: string;
+  kind: 'zakat' | 'sadaqah' | 'bills' | 'living' | 'savings';
+  amountMinor: number;
+  period: string;
+  incomeTransactionId?: string;
+  createdAt: string;
+}
+export interface Reconciliation {
+  id: string;
+  accountId: string;
+  date: string;
+  statementBalanceMinor: number;
+  ledgerBalanceMinor: number;
+  differenceMinor: number;
+  createdAt: string;
+}
+export interface LedgerSnapshot {
+  version: 2;
+  accounts: Account[];
+  categories: Category[];
+  transactions: Transaction[];
+  transfers: Transfer[];
+  subscriptions: Subscription[];
+  budgets: Budget[];
+  goals: Goal[];
+  exchangeRates: ExchangeRate[];
+  insights: CoachInsight[];
+  allocations: Allocation[];
+  reconciliations: Reconciliation[];
+  settings: UserSettings;
 }
 
 export interface MoneyPair {
@@ -155,4 +208,10 @@ export interface DashboardData {
   recentTransactions: (Transaction & { categoryName: string; accountName: string })[];
   coachInsights: CoachInsight[];
   budgets: (Budget & { spentMinor: number; categoryName: string })[];
+  hasExpenseHistory: boolean;
+  availableBdtMinor: number;
+  reservedBdtMinor: number;
+  billsDueBdtMinor: number;
+  givingReservedBdtMinor: number;
+  givingPaidBdtMinor: number;
 }

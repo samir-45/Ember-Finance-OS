@@ -1,570 +1,659 @@
 'use client';
-
-import { useState, useEffect } from 'react';
+import { Dialog } from '@/components/ui/Dialog';
+import { localDate } from '@/lib/dates';
 import {
-  Wallet, Plus, ArrowLeftRight, Landmark, CreditCard,
-  Trash2, Edit3, ArrowRight, DollarSign, CheckCircle2, History
-} from 'lucide-react';
-import { store } from '@/lib/store';
-import {
-  computeAccountBalance, formatMoney, convertToUsd,
-  convertToBdt, getConversionRate, dateLabel
+  computeAccountBalance,
+  dateLabel,
+  formatMoney,
+  getLedgerEntries,
+  toMinor,
 } from '@/lib/finance';
-import type { Account, Currency, Transfer } from '@/types';
-import { PageGuide } from '@/components/ui/PageGuide';
-import { v4 as uuid } from 'uuid';
-
+import { availableOf, balanceOf } from '@/lib/ledger';
+import { store } from '@/lib/store';
+import { useLedgerVersion } from '@/lib/use-ledger';
+import type { Account, Currency, TransactionStatus, Transfer } from '@/types';
+import { useState } from 'react';
+function previewAmount(value: string): number | null {
+  try {
+    return toMinor(value);
+  } catch {
+    return null;
+  }
+}
 export default function AccountsPage() {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [rates, setRates] = useState<number>(121.5);
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
-
-  // Modals
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showTransferModal, setShowTransferModal] = useState(false);
+  useLedgerVersion();
+  const s = store.getSnapshot();
+  const accounts = s.accounts;
+  const [accountForm, setAccountForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
-
-  // New Account Form
   const [name, setName] = useState('');
+  const [currency, setCurrency] = useState<Currency>('USD');
   const [type, setType] = useState<Account['type']>('bank');
-  const [currency, setCurrency] = useState<Currency>('BDT');
-  const [openingBalance, setOpeningBalance] = useState('');
-  const [color, setColor] = useState('#ff6a2b');
-
-  // Transfer Form
-  const [fromAccountId, setFromAccountId] = useState('');
-  const [toAccountId, setToAccountId] = useState('');
-  const [amountOut, setAmountOut] = useState('');
-  const [transferRate, setTransferRate] = useState(121.5);
-  const [transferFee, setTransferFee] = useState('0');
-
-  const refreshAccounts = () => {
-    const accs = store.getAccounts();
-    setAccounts(accs);
-    setRates(getConversionRate());
-    if (accs.length >= 2) {
-      if (!fromAccountId) setFromAccountId(accs[0].id);
-      if (!toAccountId) setToAccountId(accs[1].id);
+  const [opening, setOpening] = useState('0');
+  const [transferForm, setTransferForm] = useState(false);
+  const [editingTransfer, setEditingTransfer] = useState<Transfer | null>(null);
+  const [fromId, setFromId] = useState('');
+  const [toId, setToId] = useState('');
+  const [out, setOut] = useState('');
+  const [received, setReceived] = useState('');
+  const [fee, setFee] = useState('0');
+  const [feeCurrency, setFeeCurrency] = useState<Currency>('USD');
+  const [date, setDate] = useState(localDate());
+  const [status, setStatus] = useState<TransactionStatus>('done');
+  const [note, setNote] = useState('');
+  const [history, setHistory] = useState('');
+  const [reconciling, setReconciling] = useState('');
+  const [statement, setStatement] = useState('');
+  const [error, setError] = useState('');
+  const from = accounts.find((a) => a.id === fromId),
+    to = accounts.find((a) => a.id === toId);
+  const previewOut = previewAmount(out),
+    previewIn = previewAmount(received),
+    previewFee = previewAmount(fee),
+    previewStatement = previewAmount(statement);
+  const guard = (fn: () => void) => {
+    setError('');
+    try {
+      fn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save');
     }
   };
-
-  useEffect(() => {
-    refreshAccounts();
-  }, []);
-
-  const totalUsdNetWorth = accounts.reduce((sum, a) => {
-    const bal = computeAccountBalance(a.id);
-    return sum + convertToUsd(bal, a.currency);
-  }, 0);
-
-  // Create or Update Account
-  const handleSaveAccount = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name) return;
-
-    if (editingAccount) {
-      store.updateAccount(editingAccount.id, {
-        name,
-        type,
-        currency,
-        color,
-      });
-      setEditingAccount(null);
-    } else {
-      const newAcc: Account = {
-        id: uuid(),
-        name,
-        type,
-        currency,
-        openingBalanceMinor: Math.round((parseFloat(openingBalance) || 0) * 100),
-        color,
-        createdAt: new Date().toISOString(),
-      };
-      store.createAccount(newAcc);
-    }
-
-    setName('');
-    setOpeningBalance('');
-    setShowAddModal(false);
-    refreshAccounts();
+  const openAccount = (a?: Account) => {
+    setError('');
+    setEditingAccount(a ?? null);
+    setName(a?.name ?? '');
+    setCurrency(a?.currency ?? 'USD');
+    setType(a?.type ?? 'bank');
+    setOpening(String((a?.openingBalanceMinor ?? 0) / 100));
+    setAccountForm(true);
   };
-
-  // Delete Account
-  const handleDeleteAccount = (id: string) => {
-    if (confirm('Are you sure you want to delete this account?')) {
-      store.deleteAccount(id);
-      refreshAccounts();
-    }
+  const openTransfer = (t?: Transfer) => {
+    setError('');
+    const a = accounts.find((a) => a.id === t?.fromAccountId) ?? accounts.find((a) => !a.archived);
+    setEditingTransfer(t ?? null);
+    setFromId(t?.fromAccountId ?? a?.id ?? '');
+    setToId(t?.toAccountId ?? accounts.find((b) => !b.archived && b.id !== a?.id)?.id ?? '');
+    setOut(t ? String(t.amountOutMinor / 100) : '');
+    setReceived(t ? String(t.amountInMinor / 100) : '');
+    setFee(String((t?.feeMinor ?? 0) / 100));
+    setFeeCurrency(t?.feeCurrency ?? a?.currency ?? 'USD');
+    setDate(t?.date ?? localDate());
+    setStatus(t?.status ?? 'done');
+    setNote(t?.note ?? '');
+    setTransferForm(true);
   };
-
-  // Execute Transfer
-  const handleExecuteTransfer = (e: React.FormEvent) => {
-    e.preventDefault();
-    const fromAcc = accounts.find(a => a.id === fromAccountId);
-    const toAcc = accounts.find(a => a.id === toAccountId);
-    const amtNum = parseFloat(amountOut);
-    const feeNum = parseFloat(transferFee) || 0;
-
-    if (!fromAcc || !toAcc || !amtNum || amtNum <= 0) return;
-
-    const amountOutMinor = Math.round(amtNum * 100);
-    const feeMinor = Math.round(feeNum * 100);
-
-    // Calculate destination credit based on currencies
-    let amountInMinor = amountOutMinor;
-    if (fromAcc.currency === 'USD' && toAcc.currency === 'BDT') {
-      amountInMinor = Math.round(amtNum * transferRate * 100);
-    } else if (fromAcc.currency === 'BDT' && toAcc.currency === 'USD') {
-      amountInMinor = Math.round((amtNum / transferRate) * 100);
-    }
-
-    const transfer: Transfer = {
-      id: uuid(),
-      fromAccountId,
-      toAccountId,
+  const saveTransfer = () => {
+    if (!from || !to) throw new Error('Choose both accounts');
+    const amountOutMinor = toMinor(out),
+      amountInMinor = from.currency === to.currency ? amountOutMinor : toMinor(received),
+      feeMinor = toMinor(fee);
+    const rate =
+      from.currency === to.currency
+        ? 1
+        : from.currency === 'USD'
+          ? amountInMinor / amountOutMinor
+          : amountOutMinor / amountInMinor;
+    const values = {
+      fromAccountId: from.id,
+      toAccountId: to.id,
       amountOutMinor,
       amountInMinor,
-      exchangeRate: transferRate,
+      exchangeRate: rate,
       feeMinor,
-      feeCurrency: fromAcc.currency,
-      date: new Date().toISOString().slice(0, 10),
-      createdAt: new Date().toISOString(),
+      feeCurrency,
+      date,
+      status,
+      note,
+      reportingRate: editingTransfer?.reportingRate ?? store.getReferenceRate(),
     };
-
-    store.createTransfer(transfer);
-    setShowTransferModal(false);
-    setAmountOut('');
-    setTransferFee('0');
-    refreshAccounts();
+    if (editingTransfer) store.updateTransfer(editingTransfer.id, values);
+    else store.createTransfer({ ...values, createdAt: new Date().toISOString() });
+    setTransferForm(false);
   };
-
-  // Selected Account Transactions History
-  const selectedAccount = accounts.find(a => a.id === selectedAccountId);
-  const accountTransactions = selectedAccountId
-    ? store.getTransactions().filter(t => t.accountId === selectedAccountId).slice(0, 15)
-    : [];
-
+  const ledger = getLedgerEntries().filter((t) => t.accountId === history);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Page Header */}
+    <div className="settings-stack">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Accounts & Wallets</h1>
-          <p className="page-subtitle">Multi-currency liquidity, FX conversions, and balance tracking</p>
+          <h1 className="page-title">Accounts & transfers</h1>
+          <p className="page-subtitle">USD earnings, local balances, and statement checks</p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div className="action-row">
           <button
-            onClick={() => setShowTransferModal(true)}
-            className="btn btn-secondary btn-sm"
+            className="btn btn-secondary"
+            disabled={accounts.filter((a) => !a.archived).length < 2}
+            onClick={() => openTransfer()}
           >
-            <ArrowLeftRight size={15} /> Transfer / Convert
+            Transfer / convert
           </button>
-          <button
-            onClick={() => {
-              setEditingAccount(null);
-              setName('');
-              setOpeningBalance('');
-              setShowAddModal(true);
-            }}
-            className="btn btn-primary btn-sm"
-          >
-            <Plus size={15} /> New Account
+          <button className="btn btn-primary" onClick={() => openAccount()}>
+            New account
           </button>
         </div>
       </div>
-
-      {/* Accounts Guide */}
-      <PageGuide
-        pageTitle="Accounts & Wallets"
-        tagline="Manage multi-currency balances, cross-border payouts, and inter-account currency conversions."
-        steps={[
-          {
-            title: 'Add Your Financial Accounts',
-            description: 'Click "+ New Account" to add Bank Accounts (DBBL, City), USD Payouts (Payoneer, PayPal), or Mobile Wallets (bKash).',
-          },
-          {
-            title: 'Transfer & Convert Funds',
-            description: 'Click "Transfer / Convert" to move money between accounts (e.g., Payoneer USD to DBBL BDT) with custom exchange rate and fee deductions.',
-          },
-          {
-            title: 'Audit Individual Account Ledgers',
-            description: 'Click "View Ledger" on any account card to reveal an inline history of recent transactions exclusively tied to that account.',
-          },
-          {
-            title: 'Monitor Liquidity Distribution',
-            description: 'Keep track of how much capital is in foreign USD accounts versus readily deployable domestic BDT cash.',
-          },
-        ]}
-        concept={{
-          name: 'Atomic Double-Entry Transfers',
-          explanation: 'When transferring money between accounts (especially cross-currency), Ember debits the source account and credits the target account simultaneously with accurate fee tracking.',
-        }}
-        proTip="Always record your actual realized Payoneer-to-Bank conversion rate and fee when transferring. The Reports page uses this to show you if you are beating your historical average rate."
-      />
-
-      {/* Portfolio Aggregation Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
-        <div className="ember-glass" style={{ padding: '24px' }}>
-          <span className="label-uppercase">Consolidated Portfolio</span>
-          <p className="text-money" style={{ marginTop: 6 }}>{formatMoney(totalUsdNetWorth, 'USD')}</p>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4 }}>
-            ≈ {formatMoney(Math.round(totalUsdNetWorth * rates), 'BDT')}
+      {!accounts.length && (
+        <section className="ember-glass settings-card">
+          <h2>Add your real accounts</h2>
+          <p>
+            Start with NSave in USD, then add your local bank, bKash, or cash in BDT. Use the
+            opening balance shown on your statement for the date you start tracking.
           </p>
-        </div>
-
-        <div className="ember-glass" style={{ padding: '24px' }}>
-          <span className="label-uppercase">Foreign Holdings (USD)</span>
-          <p className="text-money" style={{ marginTop: 6, color: 'var(--color-income)' }}>
-            {formatMoney(
-              accounts
-                .filter(a => a.currency === 'USD')
-                .reduce((s, a) => s + computeAccountBalance(a.id), 0),
-              'USD'
-            )}
-          </p>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4 }}>
-            Across {accounts.filter(a => a.currency === 'USD').length} USD accounts
-          </p>
-        </div>
-
-        <div className="ember-glass" style={{ padding: '24px' }}>
-          <span className="label-uppercase">Domestic Liquidity (BDT)</span>
-          <p className="text-money" style={{ marginTop: 6 }}>
-            {formatMoney(
-              accounts
-                .filter(a => a.currency === 'BDT')
-                .reduce((s, a) => s + computeAccountBalance(a.id), 0),
-              'BDT'
-            )}
-          </p>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4 }}>
-            Across {accounts.filter(a => a.currency === 'BDT').length} local accounts
-          </p>
-        </div>
-      </div>
-
-      {/* Account Cards Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
-        {accounts.map((a) => {
-          const balance = computeAccountBalance(a.id);
-          const isUsd = a.currency === 'USD';
-
-          return (
-            <div
-              key={a.id}
-              className="ember-glass"
-              style={{
-                padding: '24px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                position: 'relative',
-                overflow: 'hidden',
-              }}
-            >
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: a.color }} />
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-                  <div>
-                    <h3 style={{ fontSize: '1.125rem', fontWeight: 600 }}>{a.name}</h3>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'capitalize', marginTop: 2 }}>
-                      {a.type} · {a.currency}
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <button
-                      onClick={() => {
-                        setEditingAccount(a);
-                        setName(a.name);
-                        setType(a.type);
-                        setCurrency(a.currency);
-                        setColor(a.color);
-                        setShowAddModal(true);
-                      }}
-                      className="btn btn-ghost btn-icon"
-                      title="Edit Account"
-                    >
-                      <Edit3 size={14} />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteAccount(a.id)}
-                      className="btn btn-ghost btn-icon"
-                      style={{ color: 'var(--color-critical)' }}
-                      title="Delete Account"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-
-                <div style={{ margin: '14px 0' }}>
-                  <span className="label-uppercase">Available Balance</span>
-                  <p className="text-money" style={{ marginTop: 4 }}>
-                    {formatMoney(balance, a.currency)}
-                  </p>
-                  {isUsd && (
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                      ≈ {formatMoney(Math.round(balance * rates), 'BDT')}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  borderTop: '1px solid var(--border-subtle)',
-                  paddingTop: 12,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
+        </section>
+      )}
+      <div className="account-grid">
+        {accounts.map((a) => (
+          <section className="ember-glass settings-card settings-stack" key={a.id}>
+            <div>
+              <h2>
+                {a.name}
+                {a.archived ? ' · archived' : ''}
+              </h2>
+              <p>
+                {a.type} · {a.currency}
+              </p>
+            </div>
+            <div>
+              <p className="label-uppercase">Recorded balance</p>
+              <p className="text-money">{formatMoney(balanceOf(s, a.id), a.currency)}</p>
+              <p>Unreserved: {formatMoney(availableOf(s, a.id), a.currency)}</p>
+              <p>
+                {a.reconciledAt
+                  ? `Matched statement on ${dateLabel(a.reconciledAt)}`
+                  : 'Not yet reconciled'}
+              </p>
+            </div>
+            <div className="action-row">
+              <button
+                className="btn btn-secondary"
+                onClick={() => setHistory(history === a.id ? '' : a.id)}
+              >
+                View ledger
+              </button>
+              <button className="btn btn-secondary" onClick={() => openAccount(a)}>
+                Edit
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  setError('');
+                  setReconciling(a.id);
+                  setStatement('');
                 }}
               >
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Opening: {formatMoney(a.openingBalanceMinor, a.currency)}
-                </span>
-                <button
-                  onClick={() => setSelectedAccountId(selectedAccountId === a.id ? null : a.id)}
-                  className="btn btn-ghost btn-sm"
-                  style={{ fontSize: '0.75rem', padding: '4px 8px' }}
-                >
-                  <History size={12} /> {selectedAccountId === a.id ? 'Hide History' : 'View Ledger'}
-                </button>
-              </div>
+                Reconcile
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() =>
+                  guard(() => {
+                    store.updateAccount(a.id, { archived: !a.archived });
+                  })
+                }
+              >
+                {a.archived ? 'Unarchive' : 'Archive'}
+              </button>
+              <button
+                className="btn btn-danger"
+                onClick={() =>
+                  guard(() => {
+                    if (
+                      confirm(`Delete ${a.name}? Accounts with history must be archived instead.`)
+                    )
+                      store.deleteAccount(a.id);
+                  })
+                }
+              >
+                Delete
+              </button>
             </div>
-          );
-        })}
+          </section>
+        ))}
       </div>
-
-      {/* Account Ledger Drawer */}
-      {selectedAccountId && selectedAccount && (
-        <div className="ember-glass" style={{ padding: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>
-              Recent Ledger — {selectedAccount.name} ({selectedAccount.currency})
-            </h3>
-            <button onClick={() => setSelectedAccountId(null)} className="btn btn-secondary btn-sm">
-              Close Ledger
-            </button>
-          </div>
-          {accountTransactions.length === 0 ? (
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', padding: '24px 0', textAlign: 'center' }}>
-              No transactions recorded for this account yet.
-            </p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {accountTransactions.map(tx => (
-                <div
-                  key={tx.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '10px 14px',
-                    borderRadius: 'var(--radius-sm)',
-                    background: 'rgba(255,255,255,0.02)',
-                    fontSize: '0.8125rem',
-                  }}
-                >
-                  <div>
-                    <p style={{ fontWeight: 500 }}>{tx.merchant || tx.note || 'Transaction'}</p>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{dateLabel(tx.date)}</p>
-                  </div>
-                  <span
-                    className="ember-number"
-                    style={{
-                      fontWeight: 600,
-                      color: tx.type === 'income' ? 'var(--color-income)' : 'var(--text-primary)',
-                    }}
-                  >
-                    {tx.type === 'income' ? '+' : '−'}{formatMoney(tx.amountMinor, tx.currency)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Add / Edit Account Modal */}
-      {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ padding: '28px' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: 20 }}>
-              {editingAccount ? 'Edit Account' : 'Add New Account'}
-            </h2>
-            <form onSubmit={handleSaveAccount} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div>
-                <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Account Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Wise USD, Brac Bank, Payoneer"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="input"
-                  required
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Account Type</label>
-                  <select
-                    value={type}
-                    onChange={e => setType(e.target.value as Account['type'])}
-                    className="input"
-                  >
-                    <option value="bank" style={{ background: '#111' }}>Bank Account</option>
-                    <option value="payoneer" style={{ background: '#111' }}>Payoneer</option>
-                    <option value="paypal" style={{ background: '#111' }}>PayPal</option>
-                    <option value="wallet" style={{ background: '#111' }}>Mobile Wallet (bKash)</option>
-                    <option value="cash" style={{ background: '#111' }}>Cash</option>
-                    <option value="crypto" style={{ background: '#111' }}>Crypto Wallet</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Currency</label>
-                  <select
-                    value={currency}
-                    onChange={e => setCurrency(e.target.value as Currency)}
-                    className="input"
-                  >
-                    <option value="BDT" style={{ background: '#111' }}>BDT (৳)</option>
-                    <option value="USD" style={{ background: '#111' }}>USD ($)</option>
-                  </select>
-                </div>
-              </div>
-
-              {!editingAccount && (
-                <div>
-                  <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Opening Balance</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={openingBalance}
-                    onChange={e => setOpeningBalance(e.target.value)}
-                    className="input"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Accent Color</label>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  {['#ff6a2b', '#6ee7a8', '#f472b6', '#a78bfa', '#60a5fa', '#fbbf24', '#34d399'].map(c => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setColor(c)}
-                      style={{
-                        width: 28, height: 28, borderRadius: '50%', background: c,
-                        border: color === c ? '2px solid #fff' : 'none', cursor: 'pointer',
-                      }}
-                    />
+      {history && (
+        <section className="ember-glass settings-card">
+          <h2>{accounts.find((a) => a.id === history)?.name} ledger</h2>
+          {ledger.length ? (
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Activity</th>
+                    <th>Status</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ledger.map((t) => (
+                    <tr key={t.id}>
+                      <td>{dateLabel(t.date)}</td>
+                      <td>{t.merchant}</td>
+                      <td>{t.status}</td>
+                      <td>
+                        {t.type === 'income' || t.direction === 'in' ? '+' : '−'}
+                        {formatMoney(t.amountMinor, t.currency)}
+                      </td>
+                    </tr>
                   ))}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-                <button type="button" onClick={() => setShowAddModal(false)} className="btn btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  {editingAccount ? 'Save Changes' : 'Create Account'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p>No activity yet.</p>
+          )}
+        </section>
       )}
-
-      {/* Transfer & Convert Modal */}
-      {showTransferModal && (
-        <div className="modal-overlay" onClick={() => setShowTransferModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ padding: '28px' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: 20 }}>
-              Transfer & Currency Conversion
-            </h2>
-            <form onSubmit={handleExecuteTransfer} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>From Account</label>
-                  <select
-                    value={fromAccountId}
-                    onChange={e => setFromAccountId(e.target.value)}
-                    className="input"
-                  >
-                    {accounts.map(a => (
-                      <option key={a.id} value={a.id} style={{ background: '#111' }}>
-                        {a.name} ({a.currency})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>To Account</label>
-                  <select
-                    value={toAccountId}
-                    onChange={e => setToAccountId(e.target.value)}
-                    className="input"
-                  >
-                    {accounts.filter(a => a.id !== fromAccountId).map(a => (
-                      <option key={a.id} value={a.id} style={{ background: '#111' }}>
-                        {a.name} ({a.currency})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Transfer Amount</label>
+      <section className="ember-glass settings-card">
+        <h2>Transfer history</h2>
+        <p>
+          Principal amounts and fees are separate. A fee is charged in its selected currency to the
+          matching account.
+        </p>
+        {s.transfers.length ? (
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Fee</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...s.transfers]
+                  .sort((a, b) => b.date.localeCompare(a.date))
+                  .map((t) => (
+                    <tr key={t.id}>
+                      <td>{dateLabel(t.date)}</td>
+                      <td>
+                        {accounts.find((a) => a.id === t.fromAccountId)?.name}
+                        <br />
+                        {formatMoney(
+                          t.amountOutMinor,
+                          accounts.find((a) => a.id === t.fromAccountId)!.currency,
+                        )}
+                      </td>
+                      <td>
+                        {accounts.find((a) => a.id === t.toAccountId)?.name}
+                        <br />
+                        {formatMoney(
+                          t.amountInMinor,
+                          accounts.find((a) => a.id === t.toAccountId)!.currency,
+                        )}
+                      </td>
+                      <td>{formatMoney(t.feeMinor, t.feeCurrency)}</td>
+                      <td>{t.status ?? 'done'}</td>
+                      <td>
+                        <div className="action-row">
+                          <button className="btn btn-secondary" onClick={() => openTransfer(t)}>
+                            Edit transfer
+                          </button>
+                          <button
+                            className="btn btn-danger"
+                            onClick={() =>
+                              guard(() => {
+                                if (confirm('Delete both transfer legs and the associated fee?'))
+                                  store.deleteTransfer(t.id);
+                              })
+                            }
+                          >
+                            Delete transfer
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p>No transfers recorded.</p>
+        )}
+      </section>
+      {error && !accountForm && !transferForm && !reconciling && (
+        <p role="alert" className="form-error">
+          {error}
+        </p>
+      )}
+      {accountForm && (
+        <Dialog
+          title={editingAccount ? 'Edit account' : 'New account'}
+          onClose={() => setAccountForm(false)}
+        >
+          <form
+            className="form-stack"
+            onSubmit={(e) => {
+              e.preventDefault();
+              guard(() => {
+                const values = { name: name.trim(), currency, type };
+                if (editingAccount) store.updateAccount(editingAccount.id, values);
+                else
+                  store.createAccount({
+                    ...values,
+                    openingBalanceMinor: toMinor(opening),
+                    color: '#ff9a72',
+                    createdAt: new Date().toISOString(),
+                  });
+                setAccountForm(false);
+              });
+            }}
+          >
+            <label htmlFor="account-name">
+              Account name
+              <input
+                id="account-name"
+                className="input"
+                placeholder="NSave, local bank, bKash…"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
+            <label htmlFor="account-type">
+              Type
+              <select
+                id="account-type"
+                className="input"
+                value={type}
+                onChange={(e) => setType(e.target.value as Account['type'])}
+              >
+                {['bank', 'wallet', 'cash', 'card', 'payoneer', 'paypal'].map((t) => (
+                  <option key={t}>{t}</option>
+                ))}
+              </select>
+            </label>
+            <label htmlFor="account-currency">
+              Currency
+              <select
+                id="account-currency"
+                className="input"
+                value={currency}
+                disabled={!!editingAccount}
+                onChange={(e) => setCurrency(e.target.value as Currency)}
+              >
+                <option>USD</option>
+                <option>BDT</option>
+              </select>
+            </label>
+            {!editingAccount && (
+              <label htmlFor="account-opening">
+                Opening balance
                 <input
+                  id="account-opening"
+                  className="input"
                   type="number"
                   step="0.01"
-                  placeholder="0.00"
-                  value={amountOut}
-                  onChange={e => setAmountOut(e.target.value)}
-                  className="input"
                   required
+                  value={opening}
+                  onChange={(e) => setOpening(e.target.value)}
                 />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Exchange Rate</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={transferRate}
-                    onChange={e => setTransferRate(Number(e.target.value))}
-                    className="input"
-                  />
+              </label>
+            )}
+            <p>
+              Opening balances establish your starting point. Use reconciliation to check later
+              balances against statements.
+            </p>
+            {error && (
+              <p role="alert" className="form-error">
+                {error}
+              </p>
+            )}
+            <button className="btn btn-primary">Save account</button>
+          </form>
+        </Dialog>
+      )}
+      {transferForm && (
+        <Dialog
+          title={editingTransfer ? 'Correct transfer' : 'Transfer / convert'}
+          onClose={() => setTransferForm(false)}
+        >
+          <form
+            className="form-stack"
+            onSubmit={(e) => {
+              e.preventDefault();
+              guard(saveTransfer);
+            }}
+          >
+            <label htmlFor="transfer-from">
+              From account
+              <select
+                id="transfer-from"
+                className="input"
+                required
+                value={fromId}
+                onChange={(e) => {
+                  setFromId(e.target.value);
+                  const a = accounts.find((a) => a.id === e.target.value)!;
+                  setFeeCurrency(a.currency);
+                  if (e.target.value === toId)
+                    setToId(accounts.find((b) => b.id !== a.id && !b.archived)?.id ?? '');
+                  setReceived('');
+                }}
+              >
+                <option value="">Choose account</option>
+                {accounts
+                  .filter((a) => !a.archived || a.id === fromId)
+                  .map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} ({a.currency})
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label htmlFor="transfer-to">
+              To account
+              <select
+                id="transfer-to"
+                className="input"
+                required
+                value={toId}
+                onChange={(e) => {
+                  setToId(e.target.value);
+                  setReceived('');
+                }}
+              >
+                <option value="">Choose account</option>
+                {accounts
+                  .filter((a) => a.id !== fromId && (!a.archived || a.id === toId))
+                  .map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} ({a.currency})
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label htmlFor="transfer-out">
+              Principal sent ({from?.currency ?? 'source currency'})
+              <input
+                id="transfer-out"
+                className="input"
+                type="number"
+                min="0.01"
+                step="0.01"
+                inputMode="decimal"
+                required
+                value={out}
+                onChange={(e) => setOut(e.target.value)}
+              />
+            </label>
+            {from?.currency !== to?.currency && (
+              <label htmlFor="transfer-received">
+                Actual principal received before any separately entered fee (
+                {to?.currency ?? 'destination currency'})
+                <input
+                  id="transfer-received"
+                  className="input"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  inputMode="decimal"
+                  required
+                  value={received}
+                  onChange={(e) => setReceived(e.target.value)}
+                />
+              </label>
+            )}
+            <p>
+              Use amounts from your transfer receipt. Fees below are additional: do not enter a fee
+              twice if it is already included in the debit or deducted from the credit.
+            </p>
+            <div className="form-two-grid">
+              <label htmlFor="transfer-fee">
+                Additional fee
+                <input
+                  id="transfer-fee"
+                  className="input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  required
+                  value={fee}
+                  onChange={(e) => setFee(e.target.value)}
+                />
+              </label>
+              <label htmlFor="transfer-fee-currency">
+                Fee currency
+                <select
+                  id="transfer-fee-currency"
+                  className="input"
+                  value={feeCurrency}
+                  onChange={(e) => setFeeCurrency(e.target.value as Currency)}
+                >
+                  {[...new Set([from?.currency, to?.currency].filter(Boolean))].map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label htmlFor="transfer-date">
+              Transfer date
+              <input
+                id="transfer-date"
+                className="input"
+                type="date"
+                required
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </label>
+            <label htmlFor="transfer-status">
+              Status
+              <select
+                id="transfer-status"
+                className="input"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as TransactionStatus)}
+              >
+                <option value="done">Settled</option>
+                <option value="pending">Pending</option>
+                <option value="planned">Planned</option>
+              </select>
+            </label>
+            <label htmlFor="transfer-note">
+              Note
+              <input
+                id="transfer-note"
+                className="input"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+            </label>
+            {from &&
+              to &&
+              previewOut !== null &&
+              previewOut > 0 &&
+              previewFee !== null &&
+              (from.currency === to.currency || (previewIn !== null && previewIn > 0)) && (
+                <div role="status">
+                  <p>
+                    {from.name} debit:{' '}
+                    {formatMoney(
+                      previewOut + (feeCurrency === from.currency ? previewFee : 0),
+                      from.currency,
+                    )}
+                  </p>
+                  <p>
+                    {to.name} net credit:{' '}
+                    {formatMoney(
+                      (from.currency === to.currency ? previewOut : previewIn!) -
+                        (feeCurrency !== from.currency ? previewFee : 0),
+                      to.currency,
+                    )}
+                  </p>
+                  <p>These changes apply to balances only when settled.</p>
                 </div>
-                <div>
-                  <label className="label-uppercase" style={{ display: 'block', marginBottom: 6 }}>Transfer Fee</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={transferFee}
-                    onChange={e => setTransferFee(e.target.value)}
-                    className="input"
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-                <button type="button" onClick={() => setShowTransferModal(false)} className="btn btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Confirm Transfer
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+              )}
+            {error && (
+              <p role="alert" className="form-error">
+                {error}
+              </p>
+            )}
+            <button className="btn btn-primary">
+              {editingTransfer ? 'Save correction' : 'Record transfer'}
+            </button>
+          </form>
+        </Dialog>
+      )}
+      {reconciling && (
+        <Dialog title="Check against a statement" onClose={() => setReconciling('')}>
+          <form
+            className="form-stack"
+            onSubmit={(e) => {
+              e.preventDefault();
+              guard(() => {
+                store.reconcile(reconciling, toMinor(statement));
+                setReconciling('');
+              });
+            }}
+          >
+            <p>
+              Compare the current recorded balance with the current settled balance on your account.
+              Pending bank activity may explain differences.
+            </p>
+            <p>
+              Recorded:{' '}
+              {formatMoney(
+                computeAccountBalance(reconciling),
+                accounts.find((a) => a.id === reconciling)!.currency,
+              )}
+            </p>
+            <label htmlFor="statement-balance">
+              Current statement balance
+              <input
+                id="statement-balance"
+                className="input"
+                type="number"
+                step="0.01"
+                required
+                value={statement}
+                onChange={(e) => setStatement(e.target.value)}
+              />
+            </label>
+            {previewStatement !== null && (
+              <p role="status">
+                Difference:{' '}
+                {formatMoney(
+                  previewStatement - computeAccountBalance(reconciling),
+                  accounts.find((a) => a.id === reconciling)!.currency,
+                )}
+              </p>
+            )}
+            <p>
+              Saving records the comparison. It does not alter the ledger. Correct missing or
+              incorrect entries before recording a match.
+            </p>
+            {error && (
+              <p role="alert" className="form-error">
+                {error}
+              </p>
+            )}
+            <button className="btn btn-primary">Save balance comparison</button>
+          </form>
+        </Dialog>
       )}
     </div>
   );

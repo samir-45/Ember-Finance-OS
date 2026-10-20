@@ -1,11 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  HelpCircle, BookOpen, X, ChevronDown, ChevronUp,
-  Lightbulb, Sparkles, Compass, CheckCircle2
-} from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { BookOpen, ChevronDown, ChevronUp, Compass, Lightbulb, Sparkles, X } from 'lucide-react';
+import { useId, useState } from 'react';
 
 export interface GuideStep {
   title: string;
@@ -33,13 +30,16 @@ export function PageGuide({
   defaultOpen = false,
 }: PageGuideProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const panelId = useId();
 
   return (
     <div style={{ margin: '4px 0 16px 0' }}>
       {/* Toggle Trigger Button */}
       <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
         <button
-          onClick={() => setIsOpen(prev => !prev)}
+          onClick={() => setIsOpen((prev) => !prev)}
+          aria-expanded={isOpen}
+          aria-controls={panelId}
           className={`btn btn-sm ${isOpen ? 'btn-primary' : 'btn-secondary'}`}
           style={{
             fontSize: '0.8125rem',
@@ -58,6 +58,7 @@ export function PageGuide({
       <AnimatePresence>
         {isOpen && (
           <motion.div
+            id={panelId}
             initial={{ opacity: 0, height: 0, y: -8 }}
             animate={{ opacity: 1, height: 'auto', y: 0 }}
             exit={{ opacity: 0, height: 0, y: -8 }}
@@ -107,11 +108,11 @@ export function PageGuide({
                 >
                   <BookOpen size={16} />
                 </span>
-                <h3 style={{ fontSize: '1.0625rem', fontWeight: 600 }}>
-                  Guide: {pageTitle}
-                </h3>
+                <h3 style={{ fontSize: '1.0625rem', fontWeight: 600 }}>Guide: {pageTitle}</h3>
               </div>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: 20 }}>
+              <p
+                style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: 20 }}
+              >
                 {tagline}
               </p>
 
@@ -119,7 +120,7 @@ export function PageGuide({
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))',
                   gap: 14,
                   marginBottom: 18,
                 }}
@@ -179,11 +180,19 @@ export function PageGuide({
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                       <Sparkles size={14} style={{ color: 'var(--color-info)' }} />
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-info)' }}>
+                      <span
+                        style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-info)' }}
+                      >
                         System Concept: {concept.name}
                       </span>
                     </div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    <p
+                      style={{
+                        fontSize: '0.75rem',
+                        color: 'var(--text-secondary)',
+                        lineHeight: 1.5,
+                      }}
+                    >
                       {concept.explanation}
                     </p>
                   </div>
@@ -199,11 +208,15 @@ export function PageGuide({
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                     <Lightbulb size={14} style={{ color: 'var(--ember-orange)' }} />
-                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--ember-orange)' }}>
+                    <span
+                      style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--ember-orange)' }}
+                    >
                       Pro Tip
                     </span>
                   </div>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  <p
+                    style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}
+                  >
                     {proTip}
                   </p>
                 </div>

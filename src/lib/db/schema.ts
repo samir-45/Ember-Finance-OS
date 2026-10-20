@@ -1,12 +1,56 @@
+import type { LedgerSnapshot } from '@/types';
+import { sql } from 'drizzle-orm';
 import {
-  pgTable,
-  text,
-  integer,
-  numeric,
+  bigint,
+  check,
   boolean,
-  timestamp,
+  integer,
   json,
+  jsonb,
+  numeric,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
 } from 'drizzle-orm/pg-core';
+
+// Canonical single-owner ledger. One atomic, versioned document preserves all
+// entity relationships and deletions; legacy normalized tables remain untouched.
+export const ledgerSnapshots = pgTable(
+  'ledger_snapshots',
+  {
+    id: text('id').primaryKey(),
+    revision: bigint('revision', { mode: 'number' }).notNull(),
+    payload: jsonb('payload').$type<LedgerSnapshot>().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    check('ledger_snapshots_id_check', sql`${t.id} = 'owner'`),
+    check(
+      'ledger_snapshots_revision_check',
+      sql`${t.revision} >= 1 and ${t.revision} <= 9007199254740991`,
+    ),
+    check('ledger_snapshots_payload_check', sql`${t.payload}->>'version' = '2'`),
+  ],
+);
+export const ledgerHistory = pgTable(
+  'ledger_history',
+  {
+    ledgerId: text('ledger_id').notNull(),
+    revision: bigint('revision', { mode: 'number' }).notNull(),
+    payload: jsonb('payload').$type<LedgerSnapshot>().notNull(),
+    savedAt: timestamp('saved_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ledgerId, t.revision] }),
+    check('ledger_history_ledger_id_check', sql`${t.ledgerId} = 'owner'`),
+    check(
+      'ledger_history_revision_check',
+      sql`${t.revision} >= 1 and ${t.revision} <= 9007199254740991`,
+    ),
+    check('ledger_history_payload_check', sql`${t.payload}->>'version' = '2'`),
+  ],
+);
 
 // ── 1. Accounts Table ──
 export const accounts = pgTable('accounts', {
