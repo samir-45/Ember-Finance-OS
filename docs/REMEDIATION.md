@@ -23,7 +23,7 @@ The implementation addresses all 28 findings from [the original audit](../artifa
 | F17 — Name-based buckets | Configurable category groups and personal targets; deficits remain negative | Shared report/insight calculations |
 | F18 — Missing modals | Shared portal dialog, focus entry/trap/return, Escape, background inert state, visible scrolling | Browser dialog entry/Escape tests |
 | F19 — Mobile overflow | Responsive dashboard grids, smaller phone gutters, wrapping controls, bounded cards/tables | Ten pages × three viewport widths |
-| F20 — Poor readability | Quiet default background, dark scrim, opaque surfaces, stronger text contrast, legible primary controls | Screenshots and automated accessibility checks |
+| F20 — Poor readability | Warm image default, translucent glass cards, graded shading for legible text and controls | Screenshots and automated accessibility checks |
 | F21 — False privacy claims | Accurate copy, browser-only default, owner-only server access, explicit AI allow switch/consent/action | No-upload/no-AI browser startup test |
 | F22 — Stale page after pull | Observable ledger version subscriptions and reactive derived views | Browser/cloud updates use the same store event path |
 | F23 — Silent storage failure | Atomic local write, propagated failures, forms remain open, recovery for invalid data | Quota failure and failed-import tests |
@@ -77,3 +77,44 @@ Owner-requested fresh start: the configured PostgreSQL database was cleared afte
 - [Migration/export/bootstrap tool](../scripts/migrate-ledger.ts)
 
 The original audit screenshots remain historical evidence. New verification screenshots, when generated, are under the ignored `artifacts/verification` directory to keep synthetic test outputs separate from source.
+
+Visual follow-up: restored the original warm TudSa image as the default and brought the dashboard cards back to translucent glass. The overall overlay is lighter, while the title and currency controls have local shading for readable text. Production build, desktop/phone layout checks, and automated WCAG AA scans passed after the visual change.
+
+## Readiness review — 21 October 2026
+
+Reviewed the current workspace without resetting financial records, migrating the configured database, or discarding the existing visual changes.
+
+Additional issues corrected:
+
+- Cloud conflict detection now preserves settings-only changes and deletion of the last account. A delayed pull cannot reconnect a paused browser workspace or replace a newer acknowledged save. A missing/older server snapshot requires review instead of silently replacing the local ledger.
+- Mounted financial views refresh on changes to the Dhaka calendar date, including tab focus/visibility and an active-tab 30-second check. The coach's personal plan audit now recalculates when the ledger changes.
+- Opening browser records is no longer held indefinitely by a stalled session endpoint. Authentication requests and conflict-copy reads have timeouts; a failed sign-out remains an error rather than claiming success.
+- A missing USD/BDT reference rate is explicitly labeled provisional and prompts the owner to configure it before entering activity. Actual transfers and saved historical reporting rates remain independent of today's estimate.
+- Added `npm run check:production`, with an optional read-only `--check-storage` probe. It reports missing deployment configuration without printing secrets or changing records. Generated the missing local owner password and independent session secret in ignored `.env`; the database URL and reset generation were preserved.
+
+Verification using Node 24:
+
+- Production build, TypeScript, and ESLint passed.
+- Unit/server/sync suite: 39 passed, zero failed; one PostgreSQL write-integration case skipped because no disposable test database was supplied. The configured real database was only read, never used as a write-test target.
+- All 16 browser cases passed across the full run and focused reruns. Coverage includes ten pages at desktop/tablet/phone widths, finance forms, restore, tab handoff, API authorization/conflicts, mounted cloud updates, month rollover, live coach updates, a hung session service, and failed sign-out.
+- Automated WCAG A/AA scans passed on the ten pages and the expanded appearance controls. The expanded-controls scan is scoped to the opened section; offscreen page headers over the fixed background image are checked separately at the top of the page. Automated contrast analysis cannot certify HONK's multicolor glyph rendering or replace manual accessibility review.
+- Dependency audit: zero reported advisories.
+- The real configured database snapshot validated on read. One subsequent probe failed and a retry succeeded; the underlying transient connectivity cause was not established. Reliable hosting connectivity and provider recovery still need deployment verification.
+
+Production configuration is not yet complete: no host/canonical HTTPS origin has been selected. Provider backup/PITR restore, deployment rate limits, HTTPS/cookie checks on the final domain, and the disposable PostgreSQL write test remain release gates. External AI/provider availability and bank integrations are not certified. See [PRODUCTION.md](PRODUCTION.md) for the preflight command and initial data-entry workflow.
+
+First-connection follow-up: a read-only inspection confirmed the reset database held an untouched default ledger at revision 1. This initial snapshot now accepts a first-time browser upload using the normal revision-checked save, rather than reporting a false conflict. Customized server settings, later empty revisions, previously connected workspaces, and competing writes still require conflict review. All nine sync regression cases, TypeScript, and targeted ESLint passed. No server financial records were changed by the inspection.
+
+## Private owner access for the deployed workspace
+
+All finance routes now require owner sign-in. Next.js Proxy redirects anonymous, forged, expired, and unconfigured sessions to `/login`; the database and AI APIs retain their own server authorization checks. Runtime configuration requires a 16-character owner password and an independent 32-character session secret. The login page provides password visibility controls, error feedback, and a restricted return destination. There is no public registration.
+
+The workspace verifies the session before loading cached financial records, rechecks on focus and periodically, and closes at the 12-hour expiry or an API authorization failure. A failed initial verification keeps cached records and recovery tools hidden. After sign-in, server sync connects automatically through the existing revision and conflict safeguards. Sign-out pauses uploads and returns to login while preserving pending edits and recovery copies. Browser-only entry controls were removed from Settings; compatibility protections for earlier demo workspaces remain.
+
+Verification uses synthetic browser records and a temporary file vault. No configured production database writes, data reset, credential rotation, or reset-generation changes were performed. The final hosting origin, distributed rate limiting, provider backup recovery, and disposable PostgreSQL integration check remain deployment requirements as described in PRODUCTION.md.
+
+Validation with Node 24: production build, TypeScript, and ESLint passed. The unit/server/sync suite passed 48 tests with the disposable PostgreSQL integration case skipped. All 24 browser cases passed across the full run and focused reruns, including eight authentication cases (anonymous access, incorrect/correct password, automatic vault connection, sign-out, pending-edit preservation, focus revalidation, timed expiry, unavailable verification, and accessible login layouts). Ten finance pages were checked at desktop/tablet/mobile widths and with automated WCAG A/AA scans. Older browser fixtures were updated for mandatory sign-in and automatic cloud loading; fixtures that edit local snapshots now wait for the initial server read. Login screenshots are retained in `artifacts/verification/screenshots/login-390.png` and `login-1440.png`. These local checks do not certify the final deployment or manual accessibility.
+
+New-device startup follow-up: sign-in previously selected cloud mode but mounted the workspace before the server ledger finished loading, so a fresh browser briefly appeared empty and relied on a later Settings pull. Startup now awaits the versioned server read before rendering finance pages. A failed read shows retry instead of an empty workspace; an existing cached copy can be opened explicitly with a visible storage warning. Conflicting offline edits remain intact and show a review notice. This change did not reset records or alter credentials. The Node 24 production build, TypeScript, targeted ESLint, nine sync cases, and all 27 browser cases passed using synthetic records and a temporary file vault.
+
+Immediate background sync follow-up: local edits now queue server uploads on the next event loop turn instead of waiting for a 1.2-second debounce. Edits made while an upload is active are sent after it completes; pending changes retry on network reconnection or browser focus. The manual Settings action is labeled as a retry. Local save and server acknowledgement remain distinct. Per owner request, no tests or build checks were run for this follow-up.

@@ -13,6 +13,7 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "test:browser": "playwright test",
     "typecheck": "tsc --noEmit",
+    "check:production": "node --import tsx scripts/check-production.ts",
     "format": "prettier --write src tests scripts playwright.config.ts eslint.config.mjs next.config.ts",
     "db:migrate": "node --env-file=.env --import tsx scripts/migrate-ledger.ts"
   },

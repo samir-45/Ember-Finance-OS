@@ -15,9 +15,9 @@ export function SystemManual() {
           to check your records.
         </p>
         <p>
-          Browser storage and JSON archives contain readable financial information. Server sync is
-          optional and requires owner sign-in. Server saves preserve previous revisions and reject
-          conflicting updates. External AI is optional and requires separate sharing consent.
+          Browser storage and JSON archives contain readable financial information. Owner sign-in
+          opens the workspace and connects server sync. Server saves preserve previous revisions and
+          reject conflicting updates. External AI is optional and requires separate sharing consent.
         </p>
         <p>
           Reports translate posted entries using their saved reporting rate. Legacy entries without

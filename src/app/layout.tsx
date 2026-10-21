@@ -1,8 +1,11 @@
 import { FlameAtmosphere } from '@/components/background/FlameAtmosphere';
-import { AppShell } from '@/components/layout/AppShell';
-import { Workspace } from '@/components/layout/Workspace';
+import { OwnerWorkspace } from '@/components/layout/OwnerWorkspace';
 import type { Metadata } from 'next';
+import { Honk } from 'next/font/google';
 import './globals.css';
+
+const honk = Honk({ weight: '400', subsets: ['latin'], display: 'swap', variable: '--font-honk' });
+
 export const metadata: Metadata = {
   title: 'Ember — Personal Finance',
   description: 'Your USD earnings, local spending, giving, and savings in one workspace.',
@@ -10,13 +13,11 @@ export const metadata: Metadata = {
 };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={honk.variable}>
       <body>
         <div className="ember-atmosphere">
           <FlameAtmosphere />
-          <Workspace>
-            <AppShell>{children}</AppShell>
-          </Workspace>
+          <OwnerWorkspace>{children}</OwnerWorkspace>
         </div>
       </body>
     </html>

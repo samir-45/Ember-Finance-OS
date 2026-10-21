@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const COOKIE = 'ember_owner';
-export const authConfigured = () => (process.env.EMBER_OWNER_PASSWORD?.length ?? 0) >= 16;
+export const authConfigured = () =>
+  (process.env.EMBER_OWNER_PASSWORD?.length ?? 0) >= 16 &&
+  (process.env.EMBER_SESSION_SECRET?.length ?? 0) >= 32;
 const secret = () =>
   createHash('sha256')
     .update(
@@ -10,6 +12,7 @@ const secret = () =>
     )
     .digest();
 export function createSession(now = Date.now()): string {
+  if (!authConfigured()) throw new Error('Owner sign-in is not configured');
   const payload = Buffer.from(
     JSON.stringify({
       owner: 'owner',
@@ -19,31 +22,34 @@ export function createSession(now = Date.now()): string {
   ).toString('base64url');
   return `${payload}.${createHmac('sha256', secret()).update(payload).digest('base64url')}`;
 }
-export function authenticated(req: Request, now = Date.now()): boolean {
-  if (!authConfigured()) return false;
+export function ownerSession(req: Request, now = Date.now()): { expiresAt: number } | null {
+  if (!authConfigured()) return null;
   const token = req.headers
     .get('cookie')
     ?.split(';')
     .map((s) => s.trim())
     .find((s) => s.startsWith(`${COOKIE}=`))
     ?.slice(COOKIE.length + 1);
-  if (!token) return false;
+  if (!token) return null;
   try {
     const [payload, signature, extra] = token.split('.');
-    if (!payload || !signature || extra) return false;
+    if (!payload || !signature || extra) return null;
     const expected = createHmac('sha256', secret()).update(payload).digest();
     const actual = Buffer.from(signature, 'base64url');
-    if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return false;
+    if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
     const data = JSON.parse(Buffer.from(payload, 'base64url').toString());
-    return (
+    const valid =
       data.owner === 'owner' &&
       typeof data.expires === 'number' &&
       data.expires > now &&
-      data.expires <= now + 12 * 3600000
-    );
+      data.expires <= now + 12 * 3600000;
+    return valid ? { expiresAt: data.expires } : null;
   } catch {
-    return false;
+    return null;
   }
+}
+export function authenticated(req: Request, now = Date.now()): boolean {
+  return ownerSession(req, now) !== null;
 }
 export function verifyPassword(password: string): boolean {
   if (!authConfigured()) return false;

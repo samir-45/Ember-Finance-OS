@@ -7,6 +7,7 @@ export function CurrencySettings() {
   useLedgerVersion();
   const settings = store.getSettings();
   const [rate, setRate] = useState(String(store.getReferenceRate()));
+  const [givingDraft, setGivingDraft] = useState(String(settings.givingPercent ?? 0));
   const [message, setMessage] = useState('');
   const update = (values: Partial<UserSettings>) => {
     store.saveSettings({ ...store.getSettings(), ...values });
@@ -67,22 +68,43 @@ export function CurrencySettings() {
         </p>
         <button className="btn btn-primary">Save reference rate</button>
       </form>
-      <label htmlFor="giving-percent">
-        Suggested income giving reserve (%)
-        <input
-          id="giving-percent"
-          className="input"
-          type="number"
-          min="0"
-          max="100"
-          value={settings.givingPercent ?? 0}
-          onChange={(e) => update({ givingPercent: Number(e.target.value) })}
-        />
-      </label>
-      <p>
-        This is your personal allocation preference. Zakat and sadaqah are recorded separately in
-        Allocations; this percentage does not determine zakat obligations.
-      </p>
+      <form
+        className="form-stack"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const value = Number(givingDraft);
+          if (givingDraft.trim() === '' || !Number.isFinite(value) || value < 0 || value > 100) {
+            setMessage('Enter a giving percentage from 0 to 100.');
+            return;
+          }
+          store.saveSettings({ ...store.getSettings(), givingPercent: value });
+          setGivingDraft(String(value));
+          setMessage(`Giving suggestion saved at ${value}%.`);
+        }}
+      >
+        <label htmlFor="giving-percent">
+          Suggested income giving reserve (%)
+          <input
+            id="giving-percent"
+            className="input"
+            type="number"
+            min="0"
+            max="100"
+            step="any"
+            required
+            value={givingDraft}
+            onChange={(e) => setGivingDraft(e.target.value)}
+          />
+        </label>
+        <p>
+          Saved suggestion: {settings.givingPercent ?? 0}% of a selected income payment. In
+          Allocations & giving, choose a posted income and apply the percentage to fill a reservation.
+          Nothing is reserved automatically. This does not calculate zakat obligations.
+        </p>
+        <button className="btn btn-secondary" type="submit">
+          Save giving suggestion
+        </button>
+      </form>
       <label htmlFor="savings-target">
         Savings target (%)
         <input

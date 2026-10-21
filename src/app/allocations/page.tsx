@@ -26,6 +26,11 @@ export default function AllocationsPage() {
   const [categoryId, setCategoryId] = useState('giving');
   const account = s.accounts.find((a) => a.id === accountId);
   const income = s.transactions.find((t) => t.id === incomeId);
+  const percentValue = Number(percent);
+  const validPercent =
+    percent.trim() !== '' && Number.isFinite(percentValue) && percentValue >= 0 && percentValue <= 100;
+  const suggestedAmountMinor =
+    income && validPercent ? Math.round((income.amountMinor * percentValue) / 100) : null;
   const grouped = s.allocations.filter((a) => a.period === period);
   return (
     <div className="settings-stack">
@@ -42,6 +47,7 @@ export default function AllocationsPage() {
             setIncomeId('');
             setName('');
             setAmount('');
+            setPercent(String(s.settings.givingPercent ?? 0));
             setOpen(true);
           }}
         >
@@ -67,6 +73,11 @@ export default function AllocationsPage() {
           Zakat and sadaqah are separate records. Enter the zakat amount you have determined for
           your own review period; the income percentage shortcut does not calculate zakat
           obligations.
+        </p>
+        <p>
+          Your saved giving suggestion is {s.settings.givingPercent ?? 0}% of a selected income
+          payment. Use it in Reserve money after choosing an income payment; no money is reserved
+          automatically. Opening account balances are not income payments.
         </p>
       </section>
       <div className="account-grid">
@@ -244,6 +255,7 @@ export default function AllocationsPage() {
                     type="number"
                     min="0"
                     max="100"
+                    step="any"
                     value={percent}
                     onChange={(e) => setPercent(e.target.value)}
                   />
@@ -251,15 +263,19 @@ export default function AllocationsPage() {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() =>
-                    setAmount(
-                      String(Math.round((income.amountMinor * Number(percent)) / 100) / 100),
-                    )
-                  }
+                  disabled={suggestedAmountMinor === null}
+                  onClick={() => setAmount(String((suggestedAmountMinor ?? 0) / 100))}
                 >
-                  Use percentage
+                  Apply percentage
                 </button>
               </div>
+            )}
+            {income && kind !== 'zakat' && suggestedAmountMinor !== null && (
+              <p>
+                Suggested reservation: {formatMoney(suggestedAmountMinor, income.currency)} from
+                this income payment. Apply the percentage, then save the reservation if it fits your
+                plan.
+              </p>
             )}
             <label htmlFor="allocation-amount">
               Amount ({account?.currency ?? 'account currency'})

@@ -5,6 +5,7 @@ import { useLedgerVersion } from '@/lib/use-ledger';
 import Link from 'next/link';
 
 import { computeDashboard, formatMoney, shortMonth } from '@/lib/finance';
+import { useBackground } from '@/lib/background';
 import type { Currency, DashboardData } from '@/types';
 import { Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -22,10 +23,10 @@ import { MetricCard } from '@/components/dashboard/MetricCard';
 import { RecentActivityWidget } from '@/components/dashboard/RecentActivityWidget';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { SubscriptionsWidget } from '@/components/dashboard/SubscriptionsWidget';
-import { PageGuide } from '@/components/ui/PageGuide';
 
 export default function DashboardPage() {
   const ledgerVersion = useLedgerVersion();
+  const [background] = useBackground();
   const [currency, setCurrency] = useState<Currency>(() => store.getSettings().baseCurrency);
   const [data, setData] = useState<DashboardData | null>(null);
 
@@ -49,6 +50,7 @@ export default function DashboardPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Page Header */}
       <div
+        className={`dashboard-intro ${background.presetId === 'tudsa' || (background.presetId === 'custom' && !background.customImageDataUrl) ? 'dashboard-intro--light' : ''}`}
         style={{
           display: 'flex',
           alignItems: 'flex-start',
@@ -58,25 +60,24 @@ export default function DashboardPage() {
         }}
       >
         <div>
-          <p className="label-uppercase" style={{ marginBottom: 8 }}>
+          <p
+            className="label-uppercase"
+            style={{ fontSize: '1.25rem', marginBottom: 12, fontWeight: 400, letterSpacing: '0.12em' }}
+          >
             {new Intl.DateTimeFormat('en', {
               timeZone: 'Asia/Dhaka',
               month: 'long',
               year: 'numeric',
             }).format(new Date())}
           </p>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 600, letterSpacing: '-0.02em' }}>
-            Your money, in focus
-          </h1>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: 4 }}>
-            A calm overview of what came in, what went out, and what you're building.
-          </p>
+          <h1 className="page-title">Your money, in focus</h1>
         </div>
         <div className="tab-bar">
           {(['BDT', 'USD'] as const).map((c) => (
             <button
               key={c}
               className={`tab-item ${currency === c ? 'active' : ''}`}
+              aria-pressed={currency === c}
               onClick={() => setCurrency(c)}
             >
               {c}
@@ -84,40 +85,6 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
-
-      {/* Dashboard Guide */}
-      <PageGuide
-        pageTitle="Dashboard"
-        tagline="Understand your consolidated financial position across foreign earnings and local spending."
-        steps={[
-          {
-            title: 'Review High-Level Metrics',
-            description:
-              'Check your consolidated Net Worth, current monthly Inflow, Outflow, and Runway months at a glance.',
-          },
-          {
-            title: 'Inspect Cash Flow Trajectory',
-            description:
-              'The 6-month area chart visualizes seasonal spikes, income volatility, and surplus patterns.',
-          },
-          {
-            title: 'Track Health Score & Breakdown',
-            description:
-              'The circular Money Health score dynamically scores savings rate, emergency reserve, and subscription overhead.',
-          },
-          {
-            title: 'Monitor Recurring & Targets',
-            description:
-              'Upcoming subscriptions and ongoing milestones are surfaced below with progress bars.',
-          },
-        ]}
-        concept={{
-          name: 'Runway Estimation',
-          explanation:
-            'Calculated as (Available liquid reserves ÷ average spending over up to 3 complete months). An emergency runway of 3 to 6 months provides resilience against income gaps.',
-        }}
-        proTip="Use the BDT / USD toggle in the top right to instantly flip the entire dashboard between domestic currency and international billing currency."
-      />
 
       {/* KPI Metric Cards */}
       <div

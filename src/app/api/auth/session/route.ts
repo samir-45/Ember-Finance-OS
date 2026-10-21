@@ -1,6 +1,6 @@
 import {
   authConfigured,
-  authenticated,
+  ownerSession,
   createSession,
   readJson,
   sameOrigin,
@@ -11,11 +11,15 @@ import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 const attempts = new Map<string, { count: number; until: number }>();
 export async function GET(req: Request) {
+  const session = ownerSession(req);
   return NextResponse.json(
     {
       configured: authConfigured(),
-      authenticated: authenticated(req),
-      workspaceResetGeneration: process.env.EMBER_WORKSPACE_RESET_GENERATION || null,
+      authenticated: session !== null,
+      expiresAt: session?.expiresAt ?? null,
+      workspaceResetGeneration: session
+        ? process.env.EMBER_WORKSPACE_RESET_GENERATION || null
+        : null,
     },
     { headers: { 'Cache-Control': 'no-store' } },
   );
@@ -27,7 +31,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error:
-          'Owner sign-in is not configured. Set an owner password of at least 16 characters on the server.',
+          'Owner sign-in is not configured. Set an owner password of at least 16 characters and an independent session secret of at least 32 characters on the server.',
       },
       { status: 503 },
     );
@@ -64,7 +68,7 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   if (!sameOrigin(req))
     return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
-  const res = NextResponse.json({ success: true });
+  const res = NextResponse.json({ success: true }, { headers: { 'Cache-Control': 'no-store' } });
   res.cookies.set(sessionCookie('', 0));
   return res;
 }

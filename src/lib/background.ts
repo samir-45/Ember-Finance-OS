@@ -29,6 +29,7 @@ export interface PresetOption {
 export const PRESET_OPTIONS: PresetOption[] = [
   {
     id: 'tudsa',
+    isDefault: true,
     name: 'Molten Ember (TudSa)',
     tagline: 'Your custom radiant fluted flame curtain',
     previewGradient: 'linear-gradient(180deg, #fff2cc 0%, #ff6a00 35%, #990c00 65%, #050507 100%)',
@@ -42,7 +43,6 @@ export const PRESET_OPTIONS: PresetOption[] = [
   },
   {
     id: 'subtle_mesh',
-    isDefault: true,
     name: 'Subtle Obsidian Hearth',
     tagline: 'Subtle black with glowing radial ember mesh & dot matrix',
     previewGradient:
@@ -67,11 +67,11 @@ const STORAGE_KEY = 'ember_bg_config';
 const EVENT_NAME = 'ember_bg_changed';
 
 export const DEFAULT_BG_CONFIG: BackgroundConfig = {
-  presetId: 'subtle_mesh',
+  presetId: 'tudsa',
   customImageDataUrl: null,
   customImageName: null,
   enableSparks: false,
-  brightness: 65,
+  brightness: 100,
   blur: 0,
 };
 

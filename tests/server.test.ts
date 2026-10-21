@@ -13,6 +13,7 @@ before(async () => {
   directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ember-regression-'));
   process.env.DATABASE_URL = 'placeholder_test';
   process.env.EMBER_OWNER_PASSWORD = 'test-only-password-at-least-32-characters';
+  process.env.EMBER_SESSION_SECRET = 'test-only-independent-session-secret-at-least-32-characters';
   process.env.EMBER_STORAGE_DRIVER = 'file';
   process.env.EMBER_VAULT_PATH = path.join(directory, 'vault.json');
   process.env.EMBER_ENABLE_EXTERNAL_AI = 'false';

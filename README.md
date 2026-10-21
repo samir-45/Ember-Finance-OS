@@ -11,9 +11,11 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:3000`. Browser-only mode works without server credentials. It starts with empty accounts and standard categories; sample data is available only in the isolated demo workspace in Settings.
+Configure the owner credentials and storage described below, then open `http://localhost:3000`. All finance pages require owner sign-in through `/login`. A new workspace starts with empty accounts and standard categories.
 
 ## Your daily workflow
+
+Before recording activity, set your USD/BDT reference rate in Settings. The initial estimate is provisional; past entries keep their saved reporting rate.
 
 1. Add NSave in USD and your real bank/wallet/cash accounts in BDT. Enter opening balances for the point where tracking begins.
 2. Record a client payment in its account currency. Use planned/pending status until funds settle.
@@ -26,7 +28,10 @@ Open `http://localhost:3000`. Browser-only mode works without server credentials
 ## Storage and privacy
 
 - Browser records and JSON exports are readable financial data; application-level encryption is not implemented.
-- Browser-only and demo modes make no automatic financial uploads.
+- Anonymous visitors are redirected to `/login` before finance pages render. Missing owner credentials keep access locked.
+- Sign-in loads the latest server ledger before opening finance pages, including on a new device. Browser storage keeps a local working copy and pending edits; signing out retains it but closes the workspace. If the vault is unavailable during startup, retry or explicitly open an existing saved browser copy.
+- Each edit saves locally immediately and queues a background server upload on the next event loop turn. New edits made during an upload are sent afterward. Pending changes retry when the browser comes online or regains focus; confirm the synced status before closing a device that has unsynced edits.
+- Sessions expire after 12 hours. Open pages return to sign-in at expiry or when the server rejects the session. A fresh page requires successful session verification before loading local records.
 - Server synchronization requires the owner password and an HTTP-only session cookie. Every ledger and AI handler verifies authorization and request origin.
 - A server save replaces one complete, validated ledger atomically, using an expected revision. Previous server revisions are retained. Concurrent edits cause a visible conflict instead of silent replacement.
 - Browser saves use one atomic localStorage snapshot. A single active editing tab is enforced with Web Locks. Use HTTPS or localhost and a browser supporting Web Locks.
@@ -35,9 +40,9 @@ Open `http://localhost:3000`. Browser-only mode works without server credentials
 - External AI is disabled by default. Requests require owner sign-in, the server allow switch, both privacy preferences, and an explicit user action. Entry text and financial summaries may be sent to Google when enabled.
 - Demo data cannot switch directly into cloud mode. Return to the saved personal workspace first.
 
-## Optional server configuration
+## Owner access and server configuration
 
-Copy `.env.example` to your environment configuration; retain any existing credentials. Set a unique random `EMBER_OWNER_PASSWORD` of at least 16 characters, a random `EMBER_SESSION_SECRET`, and the canonical `EMBER_PUBLIC_URL`.
+Copy `.env.example` to your environment configuration; retain any existing credentials. Set a unique random `EMBER_OWNER_PASSWORD` of at least 16 characters, an independent random `EMBER_SESSION_SECRET` of at least 32 characters, and the canonical `EMBER_PUBLIC_URL`. Configure these through your hosting provider's secret settings after deployment. There is no public registration or password reset endpoint; change credentials in the environment and restart the app to rotate access.
 
 For PostgreSQL, configure `DATABASE_URL` and apply the additive migration:
 
@@ -49,11 +54,11 @@ The migration creates `ledger_snapshots` and `ledger_history`; it does not rewri
 
 Alternatively, on a persistent single Node host, configure `EMBER_STORAGE_DRIVER=file` and an absolute `EMBER_VAULT_PATH` on a private durable volume. Do not put it in `public`, on ephemeral function storage, or in a deployment directory that is replaced on release. File revisions use exclusive locks and atomic replacement. File storage is not a fallback for PostgreSQL.
 
-Then sign in from Settings. Existing local and server copies are preserved when they conflict; inspect and download both before selecting a replacement.
+Then sign in at `/login`. The latest server ledger loads before the workspace opens. Existing local and server copies are preserved when they conflict; inspect and download both in Settings before selecting a replacement.
 
 ## Recovery
 
-Settings exports a complete versioned JSON ledger, previews and validates imports, and saves a pre-restore recovery copy. Restore replaces the active browser ledger; a connected server save still requires its current revision. “Reset active ledger” creates an empty current snapshot and retains prior recovery/history copies. It is not a secure erasure of all historical backups.
+Settings exports a complete versioned JSON ledger, previews and validates imports, and saves a pre-restore recovery copy. Restore replaces the active browser ledger; a connected server save still requires its current revision. Settings no longer offers a ledger reset or demo creation. Restoring an archive does not securely erase historical backups.
 
 Legacy browser keys remain untouched during migration. Invalid currencies/references stop migration with a recovery download rather than silently changing amounts. Legacy budgets with no calendar month remain `unassigned` until you assign a month in Budgets. Legacy transactions without an FX reporting rate use the reference rate present at import; verify it against original records if historical precision matters.
 
@@ -79,6 +84,7 @@ npm run build
 npx playwright install chromium
 npm run test:browser
 npm audit
+npm run check:production -- --check-storage
 ```
 
 `lint` runs ESLint and strict TypeScript. Tests cover money, calendar boundaries, transfers/fees, recurrence/idempotency, reservations, restore, auth, and revision conflicts. Browser tests use synthetic records and isolated server storage. To use an existing Chromium binary locally, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.

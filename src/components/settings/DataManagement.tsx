@@ -1,5 +1,4 @@
 'use client';
-import { seedData } from '@/data/seed';
 import { localDate } from '@/lib/dates';
 import { downloadFile } from '@/lib/finance';
 import { normalizeLedger } from '@/lib/ledger';
@@ -12,28 +11,14 @@ import {
   useSyncStatus,
 } from '@/lib/sync';
 import type { LedgerSnapshot } from '@/types';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 export function DataManagement() {
   const sync = useSyncStatus();
-  const [authenticated, setAuthenticated] = useState(false);
-  const [configured, setConfigured] = useState(false);
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<LedgerSnapshot | null>(null);
   const [remote, setRemote] = useState<{ data: LedgerSnapshot; revision: number } | null>(null);
-  useEffect(() => {
-    fetch('/api/auth/session')
-      .then((r) => r.json())
-      .then((s) => {
-        setAuthenticated(s.authenticated);
-        setConfigured(s.configured);
-      })
-      .catch(() =>
-        setError('Server sign-in is unavailable. Browser records are still accessible.'),
-      );
-  }, []);
   const action = async (fn: () => void | Promise<void>) => {
     setBusy(true);
     setError('');
@@ -52,28 +37,13 @@ export function DataManagement() {
       `ember-backup-${localDate()}.json`,
       'application/json',
     );
-  const connect = () =>
-    action(async () => {
-      const res = await fetch('/api/auth/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error);
-      setAuthenticated(true);
-      setPassword('');
-      store.setMode('cloud');
-      await pullFromCloud();
-    });
   return (
     <div className="settings-stack">
       <section className="ember-glass settings-card settings-stack">
         <h2>Storage & owner access</h2>
         <p>
-          Records are stored as plain JSON in this browser. Browser-only mode makes no automatic
-          financial uploads. Owner sign-in enables your configured server vault. Protect this device
-          and keep independent backups.
+          You are signed in as the owner. Each edit saves in this browser immediately and starts a
+          server sync in the background. Check the status below and keep independent backups.
         </p>
         <p role="status">
           {store.getLocalState().mode === 'demo'
@@ -84,98 +54,77 @@ export function DataManagement() {
           · {sync.state}
           {sync.lastSyncedAt ? ` · Saved ${new Date(sync.lastSyncedAt).toLocaleString()}` : ''}
         </p>
+        {store.getLocalState().mode === 'demo' && (
+          <button
+            className="btn btn-primary"
+            onClick={() =>
+              void action(() => {
+                const raw = localStorage.getItem('ember_personal_workspace');
+                if (!raw) throw new Error('No saved personal workspace');
+                localStorage.setItem('ember_ledger_v2', raw);
+                window.location.reload();
+              })
+            }
+          >
+            Return to personal workspace
+          </button>
+        )}
         {sync.error && (
           <p className="form-error" role="alert">
             {sync.error}
           </p>
         )}
-        {!authenticated ? (
-          configured ? (
-            <form
-              className="form-stack"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void connect();
-              }}
-            >
-              <label htmlFor="owner-password">
-                Owner password
-                <input
-                  id="owner-password"
-                  className="input"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </label>
-              <button className="btn btn-primary" disabled={busy}>
-                Sign in & connect server storage
-              </button>
-            </form>
-          ) : (
-            <p>
-              Server access is disabled until the deployment owner configures a strong owner
-              password. Browser-only use is available.
-            </p>
-          )
-        ) : (
-          <div className="action-row">
-            <button
-              className="btn btn-primary"
-              disabled={busy}
-              onClick={() =>
-                void action(async () => {
-                  store.setMode('cloud');
-                  await pullFromCloud();
-                })
-              }
-            >
-              Load server copy
-            </button>
-            <button
-              className="btn btn-secondary"
-              disabled={busy}
-              onClick={() =>
-                void action(async () => {
-                  if (!(await syncNow()))
-                    throw new Error('Sync did not complete. Review the status above.');
-                })
-              }
-            >
-              Save pending changes
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={() =>
-                void action(async () => {
-                  if (
-                    store.getLocalState().dirty &&
-                    store.getLocalState().mode === 'cloud' &&
-                    !confirm('There are unsynced changes. Keep them in this browser and sign out?')
-                  )
-                    return;
-                  await fetch('/api/auth/session', { method: 'DELETE' });
-                  store.setMode('browser');
-                  setAuthenticated(false);
-                  setMessage('Signed out. This browser still contains your local records.');
-                })
-              }
-            >
-              Sign out
-            </button>
-          </div>
-        )}
-        <button
-          className="btn btn-secondary"
-          onClick={() => {
-            store.setMode('browser');
-            setMessage('Automatic cloud sync paused. Records remain in this browser.');
-          }}
-        >
-          Use browser only
-        </button>
+        <div className="action-row">
+          <button
+            className="btn btn-primary"
+            disabled={busy}
+            onClick={() =>
+              void action(async () => {
+                store.setMode('cloud');
+                await pullFromCloud();
+              })
+            }
+          >
+            Load server copy
+          </button>
+          <button
+            className="btn btn-secondary"
+            disabled={busy}
+            onClick={() =>
+              void action(async () => {
+                if (!(await syncNow()))
+                  throw new Error('Sync did not complete. Review the status above.');
+              })
+            }
+          >
+            Retry sync now
+          </button>
+          <button
+            className="btn btn-secondary"
+            disabled={busy}
+            onClick={() =>
+              void action(async () => {
+                if (
+                  store.getLocalState().dirty &&
+                  store.getLocalState().mode === 'cloud' &&
+                  !confirm('There are unsynced changes. Keep them in this browser and sign out?')
+                )
+                  return;
+                const res = await fetch('/api/auth/session', {
+                  method: 'DELETE',
+                  signal: AbortSignal.timeout(10000),
+                });
+                if (!res.ok) throw new Error('Could not sign out of the server. Please retry.');
+                // Pause queued uploads and avoid a second unload prompt after the
+                // owner has chosen to retain pending edits. Sign-in reconnects them.
+                if (store.getLocalState().mode !== 'demo') store.setMode('browser');
+                window.location.replace('/login');
+              })
+            }
+          >
+            Sign out
+          </button>
+        </div>
       </section>
       {(sync.state === 'conflict' || remote) && (
         <section className="ember-glass settings-card settings-stack">
@@ -326,70 +275,6 @@ export function DataManagement() {
             </button>
           </div>
         )}
-      </section>
-      <section className="ember-glass settings-card settings-stack">
-        <h2>Start fresh or explore a demo</h2>
-        <p>
-          Reset creates an empty ledger and retains a recovery copy. Connected server storage
-          receives the reset through a revision-checked save; server history is retained.
-        </p>
-        <div className="action-row">
-          <button
-            className="btn btn-danger"
-            disabled={busy}
-            onClick={() =>
-              void action(async () => {
-                if (!confirm('Export a backup first. Reset the active ledger to empty?')) return;
-                store.resetAll();
-                if (store.getLocalState().mode === 'cloud' && !(await syncNow()))
-                  throw new Error(
-                    'Browser reset saved; server reset is still pending. Keep this tab open and review sync status.',
-                  );
-                setMessage('Active ledger reset. No demo records were added.');
-              })
-            }
-          >
-            Reset active ledger
-          </button>
-          <button
-            className="btn btn-secondary"
-            disabled={busy}
-            onClick={() =>
-              void action(() => {
-                if (
-                  !confirm(
-                    'Switch to an isolated demo? Your current workspace will be retained for returning later.',
-                  )
-                )
-                  return;
-                const current = localStorage.getItem('ember_ledger_v2');
-                if (current && store.getLocalState().mode !== 'demo')
-                  localStorage.setItem('ember_personal_workspace', current);
-                store.setMode('demo');
-                store.resetAll();
-                seedData();
-                setMessage('Demo loaded. Server sync is disabled.');
-              })
-            }
-          >
-            Open demo workspace
-          </button>
-          {store.getLocalState().mode === 'demo' && (
-            <button
-              className="btn btn-primary"
-              onClick={() =>
-                void action(() => {
-                  const raw = localStorage.getItem('ember_personal_workspace');
-                  if (!raw) throw new Error('No saved personal workspace');
-                  localStorage.setItem('ember_ledger_v2', raw);
-                  window.location.reload();
-                })
-              }
-            >
-              Return to personal workspace
-            </button>
-          )}
-        </div>
       </section>
       {error && (
         <p className="form-error" role="alert">

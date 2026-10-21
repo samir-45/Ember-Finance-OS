@@ -1,17 +1,28 @@
 'use client';
 import { downloadFile } from '@/lib/finance';
 import { store } from '@/lib/store';
+import { getSyncStatus, pullFromCloud, triggerAutoSync } from '@/lib/sync';
+import { emptyLedger } from '@/lib/ledger';
 import { applyWorkspaceReset } from '@/lib/workspace-reset';
 import { useLedgerVersion } from '@/lib/use-ledger';
 import { ReactNode, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { MotionConfig } from 'framer-motion';
+import { WorkspaceOpening } from './WorkspaceOpening';
 
 // A consistent hydration gate prevents browser data from differing from SSR HTML.
-export function Workspace({ children }: { children: ReactNode }) {
+export function Workspace({
+  children,
+  resetGeneration,
+}: {
+  children: ReactNode;
+  resetGeneration: unknown;
+}) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [locked, setLocked] = useState(false);
+  const [startupError, setStartupError] = useState('');
+  const [hasBrowserCopy, setHasBrowserCopy] = useState(false);
   useEffect(() => {
     let disposed = false;
     if (!navigator.locks) {
@@ -40,19 +51,25 @@ export function Workspace({ children }: { children: ReactNode }) {
         setLocked(false);
         setError('');
         try {
-          let generation: unknown = null;
-          try {
-            const response = await fetch('/api/auth/session', {
-              cache: 'no-store',
-              signal: controller.signal,
-            });
-            if (response.ok) generation = (await response.json()).workspaceResetGeneration;
-          } catch {
-            // Browser-only records remain available when the server is offline.
+          if (disposed) return;
+          applyWorkspaceReset(resetGeneration);
+          store.initialize();
+          if (store.getLocalState().mode !== 'demo') {
+            store.setMode('cloud');
+            const loaded = await pullFromCloud();
+            if (disposed) return;
+            if (!loaded && getSyncStatus().state !== 'conflict') {
+              const local = store.getLocalState();
+              setHasBrowserCopy(
+                local.dirty || JSON.stringify(local.ledger) !== JSON.stringify(emptyLedger()),
+              );
+              setStartupError(
+                getSyncStatus().error || 'Could not load the latest server copy. Try again.',
+              );
+              return;
+            }
           }
           if (disposed) return;
-          applyWorkspaceReset(generation);
-          store.initialize();
           setReady(true);
         } catch (e) {
           setError(e instanceof Error ? e.message : 'Cannot load saved records');
@@ -71,7 +88,7 @@ export function Workspace({ children }: { children: ReactNode }) {
       controller.abort();
       release();
     };
-  }, []);
+  }, [resetGeneration]);
   if (locked)
     return (
       <main className="recovery-screen">
@@ -115,12 +132,25 @@ export function Workspace({ children }: { children: ReactNode }) {
         />
       </main>
     );
-  if (!ready)
+  if (startupError && !ready)
     return (
-      <main className="recovery-screen" role="status">
-        Opening your workspace…
+      <main className="recovery-screen">
+        <h1>Could not load your latest records</h1>
+        <p role="alert">{startupError}</p>
+        <p>Your browser copy is preserved. The workspace has not opened with an empty ledger.</p>
+        <div className="action-row">
+          <button className="btn btn-primary" onClick={() => window.location.reload()}>
+            Try again
+          </button>
+          {hasBrowserCopy && (
+            <button className="btn btn-secondary" onClick={() => setReady(true)}>
+              Open saved browser copy
+            </button>
+          )}
+        </div>
       </main>
     );
+  if (!ready) return <WorkspaceOpening />;
   return (
     <MotionConfig reducedMotion="user">
       <ActiveWorkspace>{children}</ActiveWorkspace>
@@ -195,11 +225,26 @@ function ActiveWorkspace({ children }: { children: ReactNode }) {
         e.returnValue = '';
       }
     };
+    const retryPending = () => {
+      const state = store.getLocalState();
+      const sync = getSyncStatus();
+      if (
+        state.mode === 'cloud' &&
+        state.dirty &&
+        sync.state !== 'conflict' &&
+        sync.state !== 'signed-out'
+      )
+        triggerAutoSync();
+    };
     window.addEventListener('beforeunload', unload);
+    window.addEventListener('online', retryPending);
+    window.addEventListener('focus', retryPending);
     return () => {
       window.removeEventListener('error', handler);
       window.removeEventListener('unhandledrejection', pending);
       window.removeEventListener('beforeunload', unload);
+      window.removeEventListener('online', retryPending);
+      window.removeEventListener('focus', retryPending);
     };
   }, []);
   return (

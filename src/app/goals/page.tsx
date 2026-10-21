@@ -66,6 +66,7 @@ export default function GoalsPage() {
                 {Math.round((g.currentMinor / g.targetMinor) * 100)}%
               </p>
               <progress
+                className="goal-progress"
                 aria-label={`${g.name} progress`}
                 max={g.targetMinor}
                 value={Math.min(g.currentMinor, g.targetMinor)}

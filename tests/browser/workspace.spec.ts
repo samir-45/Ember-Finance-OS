@@ -124,14 +124,122 @@ async function seed(page: Page) {
     if (!localStorage.getItem('test-initialized')) {
       localStorage.setItem(
         'ember_ledger_v2',
-        JSON.stringify({ ledger, revision: 1, cloudRevision: null, dirty: false, mode: 'browser' }),
+        JSON.stringify({ ledger, revision: 1, cloudRevision: 1, dirty: false, mode: 'cloud' }),
       );
       localStorage.setItem('test-initialized', 'true');
     }
   }, fixture());
 }
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, context }) => {
   await seed(page);
+  const signedIn = await page.request.post('/api/auth/session', {
+    headers: { Origin: 'http://localhost:3100' },
+    data: { password: 'ember-e2e-only-owner-password' },
+  });
+  expect(signedIn.status()).toBe(200);
+  // Keep interaction fixtures independent of the test vault and of other tests.
+  // Dedicated API/cloud cases below use the temporary real server vault instead.
+  await context.route('**/api/db', async (route) => {
+    if (route.request().method() === 'POST') {
+      const sent = route.request().postDataJSON();
+      await route.fulfill({ json: { revision: sent.expectedRevision + 1, provider: 'file' } });
+      return;
+    }
+    const frame = route.request().frame();
+    let state;
+    try {
+      state = await frame.evaluate(() => JSON.parse(localStorage.getItem('ember_ledger_v2')!));
+    } catch (error) {
+      if (frame.isDetached() || frame.page().isClosed()) return;
+      throw error;
+    }
+    await route.fulfill({
+      json: { data: state.ledger, revision: state.cloudRevision ?? 0, provider: 'file' },
+    });
+  });
+});
+
+test('cached records remain hidden when the session endpoint cannot verify access', async ({
+  page,
+}) => {
+  await page.route('**/api/auth/session', (route) => route.abort());
+  await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('main h1')).toHaveText('Could not verify sign-in');
+  await expect(page.getByText('NSave', { exact: true })).toHaveCount(0);
+});
+
+test('a failed server sign-out stays visible and does not claim success', async ({ page }) => {
+  await page.route('**/api/auth/session', (route) =>
+    route.fulfill({
+      status: route.request().method() === 'DELETE' ? 503 : 200,
+      json: {
+        configured: true,
+        authenticated: true,
+        expiresAt: Date.now() + 12 * 3600000,
+        workspaceResetGeneration: null,
+      },
+    }),
+  );
+  await page.goto('/settings');
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(
+    page.getByText('Could not sign out of the server. Please retry.', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+  await expect(
+    page.getByText('Signed out. This browser still contains your local records.', { exact: true }),
+  ).toHaveCount(0);
+});
+
+test('an open dashboard refreshes its month and totals after the Dhaka calendar changes', async ({
+  page,
+}) => {
+  const next = new Date(`${shiftMonth(localMonth(), 1)}-01T00:01:00+06:00`);
+  const before = new Date(next.getTime() - 120000);
+  await page.clock.setFixedTime(before);
+  await page.route('**/api/auth/session', (route) =>
+    route.fulfill({
+      json: {
+        configured: true,
+        authenticated: true,
+        expiresAt: before.getTime() + 12 * 3600000,
+        workspaceResetGeneration: null,
+      },
+    }),
+  );
+  await page.goto('/dashboard');
+  await expect(page.locator('main h1')).toBeVisible();
+  await page.getByRole('button', { name: 'USD', exact: true }).click();
+  const income = page
+    .getByText('Income this month', { exact: true })
+    .locator('..')
+    .locator('.text-money');
+  await expect(income).toHaveText('$1,500');
+  await page.clock.setFixedTime(next);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(income).toHaveText('$0');
+  await expect(page.locator('.dashboard-intro .label-uppercase')).toHaveText(
+    new Intl.DateTimeFormat('en', {
+      timeZone: 'Asia/Dhaka',
+      month: 'long',
+      year: 'numeric',
+    }).format(next),
+  );
+});
+
+test('mounted coach checks respond to changed ledger preferences', async ({ page }) => {
+  await page.goto('/coach');
+  await expect(page.getByText('Target: Your target: 20%', { exact: true })).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem('ember_ledger_v2')!);
+    state.ledger.settings.savingsTargetPercent = 35;
+    state.revision++;
+    state.dirty = true;
+    localStorage.setItem('ember_ledger_v2', JSON.stringify(state));
+    window.dispatchEvent(new Event('ember_ledger_changed'));
+  });
+  await expect(page.getByText('Target: Your target: 35%', { exact: true })).toBeVisible();
 });
 
 test('all pages hydrate without runtime errors and fit desktop, tablet, and phone', async ({
@@ -183,8 +291,9 @@ test('owner-authorized fresh start clears old browser copies once and preserves 
   await page.route('**/api/auth/session', (route) =>
     route.fulfill({
       json: {
-        configured: false,
-        authenticated: false,
+        configured: true,
+        authenticated: true,
+        expiresAt: Date.now() + 12 * 3600000,
         workspaceResetGeneration: '00000000-0000-4000-8000-000000000001',
       },
     }),
@@ -201,6 +310,7 @@ test('owner-authorized fresh start clears old browser copies once and preserves 
   await expect(
     page.getByRole('heading', { name: 'Accounts & transfers', exact: true }),
   ).toBeVisible();
+  await page.waitForLoadState('networkidle');
   const first = await page.evaluate(() => ({
     ledger: JSON.parse(localStorage.getItem('ember_ledger_v2')!).ledger,
     recovery: localStorage.getItem('ember_recovery_v2'),
@@ -209,7 +319,10 @@ test('owner-authorized fresh start clears old browser copies once and preserves 
   }));
   expect(first.ledger.accounts).toEqual([]);
   expect(first.ledger.transactions).toEqual([]);
-  expect(first.recovery).toBeNull();
+  // Connecting the empty cloud ledger can create a new valid recovery copy;
+  // the pre-reset recovery data must never survive.
+  expect(first.recovery).not.toBe('old recovery');
+  if (first.recovery) expect(JSON.parse(first.recovery).ledger.accounts).toEqual([]);
   expect(first.personal).toBeNull();
   expect(first.pending).toBeNull();
   await page.evaluate((accounts) => {
@@ -229,6 +342,7 @@ test('existing future-dated postings open with a review notice instead of blocki
   await expect(
     page.getByRole('heading', { name: 'Accounts & transfers', exact: true }),
   ).toBeVisible();
+  await page.waitForLoadState('networkidle');
   const futureDate = `${shiftMonth(localMonth(), 1)}-01`;
   await page.evaluate((date) => {
     const state = JSON.parse(localStorage.getItem('ember_ledger_v2')!);
@@ -269,15 +383,20 @@ test('existing future-dated postings open with a review notice instead of blocki
   ).toEqual([]);
 });
 
-test('browser-only startup never uploads records or requests external AI', async ({ page }) => {
-  const sent: string[] = [];
+test('signed-in startup reads the vault without uploading unchanged records or requesting AI', async ({
+  page,
+}) => {
+  const sent: { url: string; method: string }[] = [];
   page.on('request', (r) => {
-    if (r.url().includes('/api/db') || r.url().includes('/api/ai/')) sent.push(r.url());
+    if (r.url().includes('/api/db') || r.url().includes('/api/ai/'))
+      sent.push({ url: r.url(), method: r.method() });
   });
   await page.goto('/coach');
   await expect(page.getByRole('heading', { name: 'Current observations' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Request AI review' })).toBeDisabled();
-  expect(sent).toEqual([]);
+  await page.waitForLoadState('networkidle');
+  expect(sent.some((r) => r.url.includes('/api/db') && r.method === 'GET')).toBe(true);
+  expect(sent.filter((r) => r.url.includes('/api/ai/') || r.method !== 'GET')).toEqual([]);
 });
 test('quick add opens a labeled dialog, keeps focus, and saves in account currency', async ({
   page,
@@ -452,7 +571,11 @@ test('core pages have no automatically detected WCAG AA violations', async ({ pa
   }
   await page.goto('/settings', { waitUntil: 'networkidle' });
   await page.getByText('Background & appearance', { exact: true }).click();
+  // The page header was checked above at the top of the page. Check the newly
+  // exposed controls here: offscreen headers over a fixed image otherwise get
+  // an unrelated background sampled by the contrast engine after scrolling.
   const appearance = await new AxeBuilder({ page })
+    .include('details[open]')
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
     .analyze();
   expect(
@@ -461,7 +584,9 @@ test('core pages have no automatically detected WCAG AA violations', async ({ pa
 });
 test('cloud pull refreshes the mounted account page without replacing dirty edits', async ({
   page,
+  context,
 }) => {
+  await context.unroute('**/api/db');
   const origin = 'http://localhost:3100';
   await page.request.post('/api/auth/session', {
     headers: { Origin: origin },

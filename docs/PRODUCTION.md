@@ -1,10 +1,47 @@
 # Production setup and recovery
 
+## Readiness check before deployment
+
+Use the environment supplied by your deployment host:
+
+```sh
+npm run check:production
+npm run check:production -- --check-storage
+```
+
+For the local `.env`, run `node --env-file=.env --import tsx scripts/check-production.ts --check-storage` using Node 24. This command only reads configuration and, when requested, the current server snapshot. It never migrates, resets, or writes financial records and never prints credentials. A nonzero exit means a required configuration check failed.
+
+The check requires Node 24, an owner password of at least 16 characters, a separate session secret of at least 32 characters, a canonical HTTPS origin, and configured storage. Passing it does not verify host TLS, distributed rate limiting, persistent volumes, or provider backup recovery. Run the functional checks below on the chosen deployment before relying on server storage.
+
+The October 21 review verified the configured database with a read-only snapshot load. Missing local owner credentials were generated in the ignored `.env`; use its `EMBER_OWNER_PASSWORD` value at `/login` after the server reloads its environment. Configure credentials separately in the chosen host's secret settings. The public HTTPS origin and hosting operations remain undecided.
+
+Do not rotate `EMBER_WORKSPACE_RESET_GENERATION` during routine deployment. Changing it authorizes another browser erasure. This readiness review did not change that generation or reset any financial records.
+
+## Before entering your real records
+
+1. Set your manual USD/BDT reference rate in Settings. Until configured, the app explicitly labels the provisional estimate. Reporting rates are saved with entries; changing today's reference does not rewrite history. Enter the actual historical reporting rate when adding an older transaction.
+2. Add your real accounts and opening balances at a chosen tracking date. Avoid also importing those same opening amounts as income.
+3. Sign in at `/login`; the server ledger loads before finance pages open. Confirm a successful sync in Settings before relying on server persistence. Browser clearing/device loss can remove pending edits that have not synced.
+4. Enter and reconcile an initial set against your own NSave/bank statements. Record actual currency conversion amounts and fees separately from income.
+5. Export a complete JSON backup and keep it somewhere independent of the browser. Verify restore in a separate browser profile or test environment.
+
+Page shells can be prerendered while financial views remain dynamic: browser hydration reads the current ledger, edits and cloud loads notify mounted views, and date-dependent calculations refresh on the Dhaka day boundary (within 30 seconds while active, or on return to the tab). Month selectors intentionally keep the month selected by the owner. FX, bank records, and religious giving amounts remain manually supplied; no automatic bank feed is implied.
+
 ## Deployment
 
 Use Node 24 LTS and HTTPS. Configure a unique owner password (at least 16 characters; prefer a randomly generated password), a random session secret, and the canonical origin in `EMBER_PUBLIC_URL`. Secure cookies are enabled in production. No server financial data is accessible until authentication is configured.
 
-The default browser workspace remains usable without a server. Data stays in browser storage until the owner explicitly connects server storage in Settings. This is a personal, single-owner product; it is not a multi-tenant service.
+Deploy with a running Next.js server or a host that supports its Proxy and API handlers. Uploading static page files alone does not provide the authentication or database service.
+
+All finance pages require a valid owner session. The Next.js Proxy redirects anonymous and expired sessions to `/login`; ledger and AI APIs continue enforcing their own authorization. Both a 16-character owner password and a separate 32-character session secret are required at runtime. Missing configuration leaves the app locked. There is no public registration.
+
+After sign-in, the client verifies the session and fetches the latest server ledger before mounting finance pages. A new device therefore opens with the server records rather than an empty browser ledger. If the vault is unavailable, startup shows a retry screen; an existing saved browser copy can be opened explicitly with an unsynced warning. Conflicting offline changes stay in the browser and show a conflict notice for review in Settings. The client checks the session on focus and periodically, and returns to login when its 12-hour session expires. An unexpired, previously verified open session can retain edits during a network outage; reloading requires a successful verification. Sign-out closes the workspace and expires the cookie while retaining the browser working copy, recovery archives, and pending edits. Browser storage remains readable to someone with access to that browser profile.
+
+After a local edit is saved, a server upload starts on the next event loop turn without delaying the form. Edits made during an upload queue a follow-up upload. Pending changes retry when the browser regains network access or focus; a revision conflict still requires owner review. A local save is not a confirmed server save: check the synced status before closing a device with pending edits.
+
+Set `EMBER_PUBLIC_URL` to the exact deployed HTTPS origin. Rotate the password or session secret in host secrets and restart all instances to invalidate existing sessions. This is a personal, single-owner product; it is not a multi-tenant service. MFA and externally managed identity are not implemented.
+
+When moving from localhost to your deployed domain, configure the same intended database to load its synced ledger after sign-in. Browser records are tied to their origin and do not move to the new URL automatically. Export a JSON backup before moving; if your current records have not synced, restore the archive on the deployed site and review any server conflict before selecting a replacement.
 
 Use deployment-level distributed rate limiting on `/api/auth/session` and `/api/ai/*`. Application cooldowns are process-local and do not replace a shared rate limiter across multiple server instances. Never log financial request bodies, cookies, database URLs, or API keys.
 
@@ -57,7 +94,7 @@ Bootstrap refuses to replace an existing canonical snapshot. Legacy tables remai
 
 ## Functional verification before relying on the deployment
 
-1. Verify anonymous requests to `/api/db` and `/api/ai/*` return 401.
+1. Open `/dashboard`, `/accounts`, and `/settings` in a private browser window and verify they redirect to `/login` without showing financial records. Verify anonymous requests to `/api/db` and `/api/ai/*` return 401.
 2. Sign in on the canonical HTTPS origin and verify the session cookie is Secure, HTTP-only, and SameSite Strict. Check cross-origin mutation rejection.
 3. Using a separate test workspace/database, record income, an actual cross-currency transfer, its fee, a bill payment, a reservation, and a goal. Reopen and compare the resulting balances.
 4. Delete a test transaction and confirm it stays deleted after refresh and reconnect.
@@ -72,7 +109,7 @@ The latest canonical PostgreSQL snapshot is in `ledger_snapshots` for owner ID `
 
 To recover an earlier revision, export its `payload` as a version-2 JSON ledger from a trusted database administration environment, validate it through Settings, inspect the preview, then restore it. That creates a new current revision through normal conflict-checked synchronization. Preserve the current revision before recovery. Do not edit the current revision counter manually.
 
-“Reset active ledger” retains history and local recovery archives. For complete erasure, account for browser legacy keys, personal/demo snapshots, recovery keys, PostgreSQL history/legacy tables, file revisions, and provider backups under the relevant retention policy. The UI does not claim to securely erase those copies.
+The Settings page no longer offers ledger reset or demo creation. For complete erasure, account for browser legacy keys, any earlier personal/demo snapshots, recovery keys, PostgreSQL history/legacy tables, file revisions, and provider backups under the relevant retention policy. Restoring an archive does not securely erase those copies.
 
 External AI additionally requires `EMBER_ENABLE_EXTERNAL_AI=true`, a valid provider key/model, both user privacy preferences, and a user request. Provider availability and policy are verified separately. Failure leaves local deterministic insights and manual entry available.
 

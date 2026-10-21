@@ -1,6 +1,7 @@
 'use client';
 
 import { auditGoldenRules, type RuleStatus } from '@/lib/golden-rules';
+import { useLedgerVersion } from '@/lib/use-ledger';
 import {
   AlertTriangle,
   ArrowRight,
@@ -15,7 +16,8 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 export function GoldenRulesAudit() {
-  const audit = useMemo(() => auditGoldenRules(), []);
+  const version = useLedgerVersion();
+  const audit = useMemo(() => auditGoldenRules(), [version]);
   const [filter, setFilter] = useState<'all' | 'pass' | 'attention'>('all');
   const [expandedRule, setExpandedRule] = useState<string | null>(null);
 

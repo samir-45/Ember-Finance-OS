@@ -48,7 +48,7 @@ export function BackgroundCustomizer() {
   };
 
   return (
-    <div className="ember-glass" style={{ padding: '28px' }}>
+    <div className="appearance-editor">
       <div
         style={{
           display: 'flex',
@@ -66,7 +66,7 @@ export function BackgroundCustomizer() {
         <button
           onClick={handleResetToDefault}
           className="btn btn-secondary btn-sm"
-          title="Restore quiet default background"
+          title="Restore original Ember background"
         >
           <RotateCcw size={14} />
           Reset to Default
