@@ -181,11 +181,15 @@ test('a failed server sign-out stays visible and does not claim success', async 
     }),
   );
   await page.goto('/settings');
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  const settingsSignOut = page.locator('#workspace-content').getByRole('button', {
+    name: 'Sign out',
+    exact: true,
+  });
+  await settingsSignOut.click();
   await expect(
     page.getByText('Could not sign out of the server. Please retry.', { exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+  await expect(settingsSignOut).toBeVisible();
   await expect(
     page.getByText('Signed out. This browser still contains your local records.', { exact: true }),
   ).toHaveCount(0);
