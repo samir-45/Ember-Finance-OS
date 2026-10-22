@@ -1,5 +1,6 @@
 'use client';
 import { Flame, Menu, Plus } from 'lucide-react';
+import { OwnerSignOutButton } from '@/components/auth/OwnerSignOutButton';
 import { useRouter } from 'next/navigation';
 export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
   const router = useRouter();
@@ -19,6 +20,7 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
         <span className="desktop-only">Your earnings, commitments, and everyday money</span>
       </div>
       <div className="action-row">
+        <OwnerSignOutButton />
         <button
           className="btn btn-primary"
           aria-label="Add activity"

@@ -39,11 +39,15 @@ After sign-in, the client verifies the session and fetches the latest server led
 
 After a local edit is saved, a server upload starts on the next event loop turn without delaying the form. Edits made during an upload queue a follow-up upload. Pending changes retry when the browser regains network access or focus; a revision conflict still requires owner review. A local save is not a confirmed server save: check the synced status before closing a device with pending edits.
 
-Set `EMBER_PUBLIC_URL` to the exact deployed HTTPS origin. Rotate the password or session secret in host secrets and restart all instances to invalidate existing sessions. This is a personal, single-owner product; it is not a multi-tenant service. MFA and externally managed identity are not implemented.
+Set `EMBER_PUBLIC_URL` to the exact deployed HTTPS origin. For passkeys, this is also the canonical origin they are registered against. Optionally set `EMBER_WEBAUTHN_RP_ID` to that hostname or a parent domain (for example, `example.com` for `app.example.com`) when you control that domain. Choose the final production domain before registering passkeys: credentials belong to their relying-party domain and cannot be moved to an unrelated domain. Localhost passkeys are for local development only.
+
+Passkey sign-in is available when PostgreSQL and `EMBER_PUBLIC_URL` are configured. Add or remove a passkey from Settings while signed in, confirming the owner password for each change. The passkey prompt may use a fingerprint, face scan, device PIN, or security key depending on the device; biometric material stays with the authenticator. Keep the owner password as recovery. Passkey public keys and one-time, five-minute challenges are stored in separate PostgreSQL tables; no private key or biometric is sent to Ember. Passkey records are not part of the finance ledger or its JSON backups.
+
+Rotate the password or session secret in host secrets and restart all instances to invalidate existing sessions. This is a personal, single-owner product; it is not a multi-tenant service. MFA and externally managed identity are not implemented.
 
 When moving from localhost to your deployed domain, configure the same intended database to load its synced ledger after sign-in. Browser records are tied to their origin and do not move to the new URL automatically. Export a JSON backup before moving; if your current records have not synced, restore the archive on the deployed site and review any server conflict before selecting a replacement.
 
-Use deployment-level distributed rate limiting on `/api/auth/session` and `/api/ai/*`. Application cooldowns are process-local and do not replace a shared rate limiter across multiple server instances. Never log financial request bodies, cookies, database URLs, or API keys.
+Use deployment-level distributed rate limiting on `/api/auth/session`, `/api/auth/passkey/*`, `/api/auth/passkeys`, and `/api/ai/*`. Application cooldowns are process-local and do not replace a shared rate limiter across multiple server instances. Never log financial request bodies, cookies, database URLs, or API keys.
 
 Choose one server storage provider:
 
@@ -60,7 +64,7 @@ With the deployment environment loaded:
 npm run db:migrate
 ```
 
-This executes `drizzle/0001_versioned_ledger.sql`. It creates the canonical snapshot and history tables and does not drop or edit legacy tables. Existing normalized legacy records block an empty canonical ledger from being silently created over them.
+This executes `drizzle/0001_versioned_ledger.sql`. It creates the canonical snapshot/history and passkey/challenge tables and does not drop or edit legacy tables or finance records. It removes only expired temporary WebAuthn challenges. Existing normalized legacy records block an empty canonical ledger from being silently created over them.
 
 The documented `db:migrate` command loads `.env`. In a deployment that injects environment variables directly, use:
 
@@ -95,7 +99,7 @@ Bootstrap refuses to replace an existing canonical snapshot. Legacy tables remai
 ## Functional verification before relying on the deployment
 
 1. Open `/dashboard`, `/accounts`, and `/settings` in a private browser window and verify they redirect to `/login` without showing financial records. Verify anonymous requests to `/api/db` and `/api/ai/*` return 401.
-2. Sign in on the canonical HTTPS origin and verify the session cookie is Secure, HTTP-only, and SameSite Strict. Check cross-origin mutation rejection.
+2. Sign in on the canonical HTTPS origin and verify the session cookie is Secure, HTTP-only, and SameSite Strict. Check cross-origin mutation rejection. Register a passkey on the final domain, sign out, and verify passkey sign-in on the intended laptop and mobile devices. Keep password access available for recovery.
 3. Using a separate test workspace/database, record income, an actual cross-currency transfer, its fee, a bill payment, a reservation, and a goal. Reopen and compare the resulting balances.
 4. Delete a test transaction and confirm it stays deleted after refresh and reconnect.
 5. Edit from a second browser to verify conflicts preserve both copies and do not silently overwrite pending edits. A second tab in one browser is intentionally prevented from editing concurrently.

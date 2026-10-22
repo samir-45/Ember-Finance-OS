@@ -156,6 +156,10 @@ body {
   align-items: center;
   gap: 6px;
 }
+.header-sign-out {
+  min-height: 44px;
+  padding: 8px 14px;
+}
 .workspace-main > * {
   min-width: 0;
 }
@@ -366,6 +370,45 @@ body {
   min-height: 48px;
   margin-top: 6px;
   font-size: 0.95rem;
+}
+.owner-passkey-option {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+.owner-passkey-option p {
+  margin: 0;
+  color: #e2d5cf;
+  font-size: 0.8rem;
+  text-align: center;
+}
+.passkey-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.passkey-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.passkey-list li > span {
+  display: grid;
+  gap: 4px;
+}
+.passkey-list small {
+  color: var(--text-muted, #d6c9c2);
+  font-size: 0.8rem;
+}
+.passkey-add-form {
+  max-width: 480px;
 }
 .owner-sign-in:disabled {
   opacity: 0.7;
@@ -1586,6 +1629,10 @@ select.input optgroup {
   }
   .desktop-only {
     display: none !important;
+  }
+  .header-sign-out {
+    width: 44px;
+    padding: 8px;
   }
   :root {
     --sidebar-width: 0px;

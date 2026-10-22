@@ -1,13 +1,47 @@
 'use client';
 import { safeReturnPath } from '@/lib/auth-navigation';
-import { Eye, EyeOff, Flame, LockKeyhole, ArrowRight } from 'lucide-react';
+import { startAuthentication } from '@simplewebauthn/browser';
+import { Eye, EyeOff, Flame, LockKeyhole, ArrowRight, Fingerprint } from 'lucide-react';
 import { useState } from 'react';
 
-export function OwnerLogin({ configured }: { configured: boolean }) {
+export function OwnerLogin({ configured, passkeysEnabled }: { configured: boolean; passkeysEnabled: boolean }) {
   const [password, setPassword] = useState('');
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const completeLogin = () => {
+    const destination = new URLSearchParams(window.location.search).get('next');
+    window.location.replace(safeReturnPath(destination));
+  };
+  const signInWithPasskey = async () => {
+    if (passkeyBusy) return;
+    setPasskeyBusy(true);
+    setError('');
+    try {
+      const optionsResponse = await fetch('/api/auth/passkey/authentication-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+        cache: 'no-store',
+      });
+      const optionsResult = await optionsResponse.json();
+      if (!optionsResponse.ok) throw new Error(optionsResult.error || 'Passkey sign-in is unavailable.');
+      const assertion = await startAuthentication({ optionsJSON: optionsResult.options });
+      const verifyResponse = await fetch('/api/auth/passkey/authentication-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ response: assertion, challengeId: optionsResult.challengeId }),
+        cache: 'no-store',
+      });
+      const verifyResult = await verifyResponse.json();
+      if (!verifyResponse.ok) throw new Error(verifyResult.error || 'Passkey sign-in failed.');
+      completeLogin();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Passkey sign-in failed.');
+      setPasskeyBusy(false);
+    }
+  };
   return (
     <main className="owner-login">
       <section className="owner-login-card" aria-labelledby="login-title">
@@ -40,8 +74,7 @@ export function OwnerLogin({ configured }: { configured: boolean }) {
                 if (!response.ok)
                   throw new Error(result.error || 'Could not sign in. Please try again.');
                 setPassword('');
-                const destination = new URLSearchParams(window.location.search).get('next');
-                window.location.replace(safeReturnPath(destination));
+                completeLogin();
               } catch (cause) {
                 setError(
                   cause instanceof Error && cause.name !== 'TimeoutError'
@@ -96,6 +129,20 @@ export function OwnerLogin({ configured }: { configured: boolean }) {
             Owner sign-in is not configured for this deployment. Set the owner password and session
             secret in your hosting settings, then restart the app.
           </p>
+        )}
+        {configured && passkeysEnabled && (
+          <div className="owner-passkey-option">
+            <button
+              className="btn btn-secondary owner-sign-in"
+              type="button"
+              disabled={passkeyBusy || busy}
+              onClick={() => void signInWithPasskey()}
+            >
+              <Fingerprint size={19} aria-hidden="true" />
+              {passkeyBusy ? 'Waiting for your device…' : 'Sign in with a passkey'}
+            </button>
+            <p>Use your device’s fingerprint, face scan, PIN, or security key.</p>
+          </div>
         )}
         <p className="owner-login-footer">
           <LockKeyhole size={14} aria-hidden="true" />

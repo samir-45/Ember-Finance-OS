@@ -3,6 +3,7 @@ import { BackgroundCustomizer } from '@/components/settings/BackgroundCustomizer
 import { CategorySettings } from '@/components/settings/CategorySettings';
 import { CurrencySettings } from '@/components/settings/CurrencySettings';
 import { DataManagement } from '@/components/settings/DataManagement';
+import { PasskeyManager } from '@/components/auth/PasskeyManager';
 import { SystemManual } from '@/components/settings/SystemManual';
 import { ChevronDown, Palette } from 'lucide-react';
 export default function SettingsPage() {
@@ -14,6 +15,7 @@ export default function SettingsPage() {
           <p className="page-subtitle">Storage, privacy, currencies, and personal targets</p>
         </div>
       </div>
+      <PasskeyManager />
       <DataManagement />
       <CurrencySettings />
       <CategorySettings />
