@@ -137,8 +137,12 @@ test('sign-out closes the workspace and retains the local ledger for the owner t
   await vault(page);
   await signIn(page);
   await page.goto('/settings');
-  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  const settingsSignOut = page.locator('#workspace-content').getByRole('button', {
+    name: 'Sign out',
+    exact: true,
+  });
+  await expect(settingsSignOut).toBeVisible();
+  await settingsSignOut.click();
   await expect(page).toHaveURL('/login');
   expect(
     await page.evaluate(
@@ -155,7 +159,11 @@ test('sign-out preserves unsynced edits after a single confirmation', async ({ p
   await vault(page);
   await signIn(page);
   await page.goto('/settings');
-  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+  const settingsSignOut = page.locator('#workspace-content').getByRole('button', {
+    name: 'Sign out',
+    exact: true,
+  });
+  await expect(settingsSignOut).toBeVisible();
   await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('ember_ledger_v2')!);
     state.ledger.settings.givingPercent = 2.5;
@@ -169,7 +177,7 @@ test('sign-out preserves unsynced edits after a single confirmation', async ({ p
     confirmations++;
     await dialog.accept();
   });
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await settingsSignOut.click();
   await expect(page).toHaveURL('/login');
   expect(confirmations).toBe(1);
   const retained = await page.evaluate(() => JSON.parse(localStorage.getItem('ember_ledger_v2')!));
