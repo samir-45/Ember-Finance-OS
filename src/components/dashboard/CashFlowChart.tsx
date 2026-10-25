@@ -1,6 +1,7 @@
 'use client';
 
-import { formatMoney } from '@/lib/finance';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { formatMoney, formatMoneyShort } from '@/lib/finance';
 import type { Currency } from '@/types';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { SectionCard } from './SectionCard';
@@ -25,58 +26,66 @@ export function CashFlowChart({ data, currency }: CashFlowChartProps) {
       }
       index={0}
     >
-      <div style={{ height: 220 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-            <defs>
-              <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#6ee7a8" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#6ee7a8" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="expenseGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#ff3b1f" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#ff3b1f" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <XAxis
-              dataKey="month"
-              tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip
-              contentStyle={{
-                background: 'rgba(15,15,15,0.95)',
-                border: '1px solid var(--border-default)',
-                borderRadius: 'var(--radius-md)',
-                fontSize: '0.8125rem',
-              }}
-              formatter={(value) => [formatMoney(Math.round(Number(value) * 100), currency), '']}
-            />
-            <Area
-              isAnimationActive={false}
-              type="monotone"
-              dataKey="income"
-              stroke="#6ee7a8"
-              fill="url(#incomeGrad)"
-              strokeWidth={2}
-            />
-            <Area
-              isAnimationActive={false}
-              type="monotone"
-              dataKey="expenses"
-              stroke="#ff3b1f"
-              fill="url(#expenseGrad)"
-              strokeWidth={2}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+      {data.every((d) => !d.income && !d.expenses) ? (
+        <EmptyState text="Your cash flow will appear once you record income or expenses." />
+      ) : (
+        <div style={{ height: 220 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#6ee7a8" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="#6ee7a8" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="expenseGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ff3b1f" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="#ff3b1f" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis
+                dataKey="month"
+                tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tickFormatter={(v) => formatMoneyShort(Math.round(Number(v) * 100), currency)}
+                tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: 'rgba(15,15,15,0.95)',
+                  border: '1px solid var(--border-default)',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: '0.8125rem',
+                }}
+                formatter={(value, name) => [
+                  formatMoney(Math.round(Number(value) * 100), currency),
+                  name === 'income' ? 'Income' : 'Expenses',
+                ]}
+              />
+              <Area
+                isAnimationActive={false}
+                type="monotone"
+                dataKey="income"
+                stroke="#6ee7a8"
+                fill="url(#incomeGrad)"
+                strokeWidth={2}
+              />
+              <Area
+                isAnimationActive={false}
+                type="monotone"
+                dataKey="expenses"
+                stroke="#ff3b1f"
+                fill="url(#expenseGrad)"
+                strokeWidth={2}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
       <div
         style={{
           display: 'flex',

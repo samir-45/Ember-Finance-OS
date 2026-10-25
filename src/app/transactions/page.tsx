@@ -320,7 +320,13 @@ function TransactionsContent() {
                     {t.note && <p className="page-subtitle">{t.note}</p>}
                   </td>
                   <td>{s.accounts.find((a) => a.id === t.accountId)?.name}</td>
-                  <td>{t.status}</td>
+                  <td>
+                    {t.status === 'done'
+                      ? 'Settled'
+                      : t.status === 'pending'
+                        ? 'Pending'
+                        : 'Planned'}
+                  </td>
                   <td className="ember-number">
                     {t.type === 'income' || t.direction === 'in' ? '+' : '−'}
                     {formatMoney(t.amountMinor, t.currency)}
