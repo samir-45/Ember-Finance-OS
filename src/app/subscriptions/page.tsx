@@ -14,6 +14,7 @@ import {
 import { store } from '@/lib/store';
 import type { Account, Category, Currency, Subscription } from '@/types';
 import { Calendar, Check, CheckCircle2, PauseCircle, Plus, Trash2 } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 export default function SubscriptionsPage() {
@@ -40,8 +41,8 @@ export default function SubscriptionsPage() {
       a.nextBillingDate.localeCompare(b.nextBillingDate),
     );
     setSubscriptions(subs);
-    const accs = store.getAccounts();
-    setAccounts(accs.filter((a) => !a.archived));
+    const accs = store.getAccounts().filter((a) => !a.archived);
+    setAccounts(accs);
     const cats = store.getCategories().filter((c) => c.type === 'expense');
     setCategories(cats);
     if (accs.length > 0 && !accountId) {
@@ -506,6 +507,11 @@ export default function SubscriptionsPage() {
                     </option>
                   ))}
                 </select>
+                {!accounts.length && (
+                  <Link href="/accounts" style={{ fontSize: '0.75rem' }}>
+                    Add an account first
+                  </Link>
+                )}
               </div>
               <div>
                 <label
