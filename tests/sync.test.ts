@@ -112,3 +112,29 @@ test('ledgers loaded only in memory are never sent to the database', async () =>
   await idle();
   assert.equal(db.posts, 0);
 });
+
+test('a reload that started before an edit cannot overwrite that edit when it returns', async () => {
+  const realFetch = globalThis.fetch;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const stale = structuredClone(db.data);
+  globalThis.fetch = async (url, options) => {
+    if (options?.method !== 'POST') {
+      await gate;
+      return new Response(JSON.stringify({ revision: 5, data: stale, provider: 'postgresql' }));
+    }
+    return realFetch(url, options);
+  };
+  try {
+    const reload = loadFromServer();
+    store.updateAccount('bank', { name: 'Edited during reload' });
+    release();
+    await reload;
+    globalThis.fetch = realFetch;
+    await idle();
+    assert.equal(store.getAccounts()[0].name, 'Edited during reload');
+    assert.equal(db.data.accounts[0].name, 'Edited during reload');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});

@@ -1,5 +1,7 @@
 'use client';
 import { useSyncExternalStore } from 'react';
+// store.ts imports queueSave from here; both only call each other inside functions.
+import { store } from './store';
 export type SyncState = 'idle' | 'loading' | 'saving' | 'saved' | 'error' | 'signed-out';
 export interface SyncStatus {
   state: SyncState;
@@ -48,7 +50,7 @@ export function discardUnsavedChanges() {
 
 /** Reads the ledger from the database. Throws when it cannot, so nothing stale is shown. */
 export async function loadFromServer(): Promise<void> {
-  const { store } = await import('./store');
+  const startedVersion = store.version();
   status({ state: 'loading' });
   let res: Response;
   try {
@@ -67,6 +69,9 @@ export async function loadFromServer(): Promise<void> {
   }
   if (!Number.isSafeInteger(result.revision) || result.revision < 0)
     throw new Error('The database returned an invalid revision.');
+  // An edit made while this read was in flight is newer than its answer; that edit
+  // is being saved and wins, so the older copy must not replace it.
+  if (store.version() !== startedVersion) return;
   store.replaceFromServer(result.data, result.revision);
   savedVersion = store.version();
   status({ state: 'saved', provider: result.provider ?? null });
@@ -93,7 +98,6 @@ export function saveNow(): Promise<boolean> {
 }
 
 async function save(): Promise<boolean> {
-  const { store } = await import('./store');
   // Keep saving until the database holds everything shown on screen.
   while (store.isConnected() && store.version() !== savedVersion) {
     const sentVersion = store.version();
