@@ -2,6 +2,7 @@
 import { Dialog } from '@/components/ui/Dialog';
 import { localDate } from '@/lib/dates';
 import {
+  accountTypeLabel,
   computeAccountBalance,
   dateLabel,
   formatMoney,
@@ -150,13 +151,19 @@ export default function AccountsPage() {
                 {a.archived ? ' · archived' : ''}
               </h2>
               <p>
-                {a.type} · {a.currency}
+                {accountTypeLabel(a.type)} · {a.currency}
               </p>
             </div>
             <div>
-              <p className="label-uppercase">Recorded balance</p>
+              <p className="label-uppercase">
+                {a.type === 'receivable' ? 'Still owed to you' : 'Recorded balance'}
+              </p>
               <p className="text-money">{formatMoney(balanceOf(s, a.id), a.currency)}</p>
-              <p>Unreserved: {formatMoney(availableOf(s, a.id), a.currency)}</p>
+              {a.type === 'receivable' ? (
+                <p>Not counted as spendable money. Record repayments as a transfer out.</p>
+              ) : (
+                <p>Unreserved: {formatMoney(availableOf(s, a.id), a.currency)}</p>
+              )}
               <p>
                 {a.reconciledAt
                   ? `Matched statement on ${dateLabel(a.reconciledAt)}`
@@ -361,8 +368,12 @@ export default function AccountsPage() {
                 value={type}
                 onChange={(e) => setType(e.target.value as Account['type'])}
               >
-                {['bank', 'wallet', 'cash', 'card', 'payoneer', 'paypal'].map((t) => (
-                  <option key={t}>{t}</option>
+                {(
+                  ['bank', 'wallet', 'cash', 'card', 'payoneer', 'paypal', 'receivable'] as const
+                ).map((t) => (
+                  <option key={t} value={t}>
+                    {accountTypeLabel(t)}
+                  </option>
                 ))}
               </select>
             </label>

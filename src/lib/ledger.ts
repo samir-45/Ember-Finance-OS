@@ -44,7 +44,7 @@ export const ledgerSchema = z
       z.object({
         id,
         name: text.min(1),
-        type: z.enum(['bank', 'wallet', 'cash', 'card', 'payoneer', 'paypal']),
+        type: z.enum(['bank', 'wallet', 'cash', 'card', 'payoneer', 'paypal', 'receivable']),
         currency,
         openingBalanceMinor: minor,
         color: text,

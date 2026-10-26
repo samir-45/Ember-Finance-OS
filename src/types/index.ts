@@ -9,7 +9,9 @@ export type TransactionStatus = 'planned' | 'pending' | 'done';
 export type BillingCycle = 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 export type InsightKind = 'tip' | 'warning' | 'win' | 'review';
 export type InsightSeverity = 'info' | 'warning' | 'critical';
-export type AccountType = 'bank' | 'wallet' | 'cash' | 'card' | 'payoneer' | 'paypal';
+// 'receivable' holds money lent to someone: an asset, but not spendable.
+export type AccountType =
+  'bank' | 'wallet' | 'cash' | 'card' | 'payoneer' | 'paypal' | 'receivable';
 
 export interface Account {
   id: string;

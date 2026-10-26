@@ -1,7 +1,7 @@
 'use client';
 
 import { EmptyState } from '@/components/ui/EmptyState';
-import { formatMoney } from '@/lib/finance';
+import { accountTypeLabel, formatMoney } from '@/lib/finance';
 import type { AccountBalance } from '@/types';
 import { useRouter } from 'next/navigation';
 import { SectionCard } from './SectionCard';
@@ -43,7 +43,7 @@ export function AccountsWidget({ accounts }: AccountsWidgetProps) {
                       textTransform: 'capitalize',
                     }}
                   >
-                    {a.type} · {a.currency}
+                    {accountTypeLabel(a.type)} · {a.currency}
                   </p>
                 </div>
               </div>

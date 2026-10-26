@@ -1,4 +1,5 @@
 import type {
+  AccountType,
   Category,
   Currency,
   DashboardData,
@@ -43,6 +44,8 @@ export function toMinor(value: string | number): number {
   return Number(minor);
 }
 export const fromMinor = (minor: number) => minor / 100;
+export const accountTypeLabel = (type: AccountType) =>
+  type === 'receivable' ? 'Lent out (owed to me)' : type;
 export function dateLabel(value?: string): string {
   return value
     ? new Intl.DateTimeFormat('en', {
@@ -204,23 +207,25 @@ export function computeRunway(s = store.getSnapshot()) {
   const burn = periods.length
     ? periods.reduce((n, m) => n + monthlyTotals(m, s).expenses.usdMinor, 0) / periods.length
     : 0;
-  // Emergency reserves remain available for runway; purchase goals are earmarked.
-  const reserve = s.accounts.reduce(
-    (n, a) =>
-      n +
-      convertToUsd(
-        balanceOf(s, a.id) -
-          s.allocations
-            .filter((x) => x.accountId === a.id && x.kind !== 'living')
-            .reduce((v, x) => v + x.amountMinor, 0) -
-          s.goals
-            .filter((g) => g.accountId === a.id && !g.isEmergency)
-            .reduce((v, g) => v + g.currentMinor, 0) -
-          uncoveredBills(s, a.id),
-        a.currency,
-      ),
-    0,
-  );
+  // Emergency reserves remain available for runway; purchase goals and money lent out do not.
+  const reserve = s.accounts
+    .filter((a) => a.type !== 'receivable')
+    .reduce(
+      (n, a) =>
+        n +
+        convertToUsd(
+          balanceOf(s, a.id) -
+            s.allocations
+              .filter((x) => x.accountId === a.id && x.kind !== 'living')
+              .reduce((v, x) => v + x.amountMinor, 0) -
+            s.goals
+              .filter((g) => g.accountId === a.id && !g.isEmergency)
+              .reduce((v, g) => v + g.currentMinor, 0) -
+            uncoveredBills(s, a.id),
+          a.currency,
+        ),
+      0,
+    );
   return {
     hasHistory: burn > 0,
     averageMonthlyUsdMinor: burn,
@@ -352,7 +357,7 @@ export function computeDashboard(): DashboardData {
   const dueByAccount = (id: string) =>
     due.filter((b) => b.accountId === id).reduce((n, b) => n + b.amountMinor, 0);
   const availableBdtMinor = accounts
-    .filter((a) => a.currency === 'BDT' && !a.archived)
+    .filter((a) => a.currency === 'BDT' && !a.archived && a.type !== 'receivable')
     .reduce((n, a) => {
       const billReserves = s.allocations
         .filter((x) => x.accountId === a.id && x.kind === 'bills')

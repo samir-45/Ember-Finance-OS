@@ -393,6 +393,46 @@ test('income baseline uses complete months and ignores the size of a partial cur
   );
   assert.equal(computeIncomeBaseline(), 100000);
 });
+test('money lent to a friend stays in net worth but not in spendable funds or runway until repaid', () => {
+  store.createTransaction(
+    expense({ date: `${shiftMonth(localMonth(), -1)}-01`, amountMinor: 1200000 }),
+  );
+  store.createAccount({
+    name: 'Friend (owes me)',
+    type: 'receivable',
+    currency: 'BDT',
+    openingBalanceMinor: 0,
+    color: '#fff',
+    createdAt: localDate(),
+  });
+  const loan = store.getAccounts().find((a) => a.type === 'receivable')!.id;
+  const before = computeDashboard();
+  const runwayBefore = computeRunway().months;
+  const move = (id: string, from: string, to: string) =>
+    store.createTransfer({
+      id,
+      fromAccountId: from,
+      toAccountId: to,
+      amountOutMinor: 200000,
+      amountInMinor: 200000,
+      exchangeRate: 1,
+      feeMinor: 0,
+      feeCurrency: 'BDT',
+      date: localDate(),
+      createdAt: localDate(),
+    });
+  move('lend', 'bdt', loan);
+  const lent = computeDashboard();
+  assert.equal(balanceOf(store.getSnapshot(), loan), 200000);
+  assert.equal(lent.availableBdtMinor, before.availableBdtMinor - 200000);
+  assert.equal(lent.netWorth.bdtMinor, before.netWorth.bdtMinor);
+  assert.equal(lent.expensesThisMonth.bdtMinor, before.expensesThisMonth.bdtMinor);
+  assert.ok(computeRunway().months < runwayBefore);
+  move('repay', loan, 'bdt');
+  assert.equal(balanceOf(store.getSnapshot(), loan), 0);
+  assert.equal(computeDashboard().availableBdtMinor, before.availableBdtMinor);
+  assert.equal(computeRunway().months, runwayBefore);
+});
 test('purchase goals are excluded from runway while explicitly designated emergency reserves remain liquid', () => {
   store.createTransaction(
     expense({ date: `${shiftMonth(localMonth(), -1)}-01`, amountMinor: 1200000 }),
