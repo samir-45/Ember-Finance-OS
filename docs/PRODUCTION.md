@@ -15,8 +15,6 @@ The check requires Node 24, an owner password of at least 16 characters, a separ
 
 The October 21 review verified the configured database with a read-only snapshot load. Missing local owner credentials were generated in the ignored `.env`; use its `EMBER_OWNER_PASSWORD` value at `/login` after the server reloads its environment. Configure credentials separately in the chosen host's secret settings. The public HTTPS origin and hosting operations remain undecided.
 
-Do not rotate `EMBER_WORKSPACE_RESET_GENERATION` during routine deployment. Changing it authorizes another browser erasure. This readiness review did not change that generation or reset any financial records.
-
 ## Before entering your real records
 
 1. Set your manual USD/BDT reference rate in Settings. Until configured, the app explicitly labels the provisional estimate. Reporting rates are saved with entries; changing today's reference does not rewrite history. Enter the actual historical reporting rate when adding an older transaction.
@@ -35,9 +33,9 @@ Deploy with a running Next.js server or a host that supports its Proxy and API h
 
 All finance pages require a valid owner session. The Next.js Proxy redirects anonymous and expired sessions to `/login`; ledger and AI APIs continue enforcing their own authorization. Both a 16-character owner password and a separate 32-character session secret are required at runtime. Missing configuration leaves the app locked. There is no public registration.
 
-After sign-in, the client verifies the session and fetches the latest server ledger before mounting finance pages. A new device therefore opens with the server records rather than an empty browser ledger. If the vault is unavailable, startup shows a retry screen; an existing saved browser copy can be opened explicitly with an unsynced warning. Conflicting offline changes stay in the browser and show a conflict notice for review in Settings. The client checks the session on focus and periodically, and returns to login when its 12-hour session expires. An unexpired, previously verified open session can retain edits during a network outage; reloading requires a successful verification. Sign-out closes the workspace and expires the cookie while retaining the browser working copy, recovery archives, and pending edits. Browser storage remains readable to someone with access to that browser profile.
+After sign-in, the client verifies the session and loads the ledger from the database before mounting finance pages. The database is the only copy: nothing financial is written to browser storage. If the database is unavailable, startup shows a retry screen. The client checks the session on focus and periodically, returns to login when its 12-hour session expires, and reloads the ledger from the database when the tab regains focus.
 
-After a local edit is saved, a server upload starts on the next event loop turn without delaying the form. Edits made during an upload queue a follow-up upload. Pending changes retry when the browser regains network access or focus; a revision conflict still requires owner review. A local save is not a confirmed server save: check the synced status before closing a device with pending edits.
+Each change is applied on screen and saved to the database straight away; changes made during a save are sent right after it against the new revision. A rejected or failed save reloads the database copy and reports that the change was not saved. Leaving or signing out while a save is in flight asks for confirmation.
 
 Set `EMBER_PUBLIC_URL` to the exact deployed HTTPS origin. For passkeys, this is also the canonical origin they are registered against. Optionally set `EMBER_WEBAUTHN_RP_ID` to that hostname or a parent domain (for example, `example.com` for `app.example.com`) when you control that domain. Choose the final production domain before registering passkeys: credentials belong to their relying-party domain and cannot be moved to an unrelated domain. Localhost passkeys are for local development only.
 
@@ -113,12 +111,11 @@ The latest canonical PostgreSQL snapshot is in `ledger_snapshots` for owner ID `
 
 To recover an earlier revision, export its `payload` as a version-2 JSON ledger from a trusted database administration environment, validate it through Settings, inspect the preview, then restore it. That creates a new current revision through normal conflict-checked synchronization. Preserve the current revision before recovery. Do not edit the current revision counter manually.
 
-The Settings page no longer offers ledger reset or demo creation. For complete erasure, account for browser legacy keys, any earlier personal/demo snapshots, recovery keys, PostgreSQL history/legacy tables, file revisions, and provider backups under the relevant retention policy. Restoring an archive does not securely erase those copies.
+For complete erasure, account for PostgreSQL history/legacy tables, file revisions, exported backups and provider backups under the relevant retention policy. Restoring an archive does not securely erase those copies.
 
 External AI additionally requires `EMBER_ENABLE_EXTERNAL_AI=true`, a valid provider key/model, both user privacy preferences, and a user request. Provider availability and policy are verified separately. Failure leaves local deterministic insights and manual entry available.
 
 ## Explicit full fresh start
 
-For an owner-authorized erasure, `node --env-file=.env --import tsx scripts/reset-data.ts --inspect` reports only application table row counts. `--confirm-erase-all` clears the known Ember tables and retained history in one transaction, keeps the schema, and creates an empty canonical ledger. It does not use `CASCADE` or touch unrelated tables. The tool also removes the explicitly configured/legacy vault and its retained file revisions, then sets a new `EMBER_WORKSPACE_RESET_GENERATION` in the local `.env`.
+For an owner-authorized erasure, `node --env-file=.env --import tsx scripts/reset-data.ts --inspect` reports only application table row counts. `--confirm-erase-all` clears the known Ember tables and retained history in one transaction, keeps the schema, and creates an empty canonical ledger. It does not use `CASCADE` or touch unrelated tables. The tool also removes the explicitly configured/legacy vault and its retained file revisions.
 
-On the next online workspace load, the app reads this generation from session metadata and removes Ember local/session storage, including legacy records, recovery copies, demo/personal workspace copies, and saved appearance settings. The remembered generation prevents later reloads from deleting newly entered data. Browser-only finance records are not uploaded by this check. Closed or offline browsers are cleared when they next open online against that server; a hosted deployment must receive the same generation configuration before its browser copies can be reset. Exported files outside the project and provider-managed backups are outside the tool's scope.

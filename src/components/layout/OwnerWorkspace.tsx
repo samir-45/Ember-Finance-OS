@@ -8,7 +8,6 @@ import { WorkspaceOpening } from './WorkspaceOpening';
 
 interface OwnerSession {
   expiresAt: number;
-  workspaceResetGeneration: unknown;
 }
 
 export function OwnerWorkspace({ children }: { children: ReactNode }) {
@@ -55,7 +54,6 @@ function SignedInWorkspace({ children }: { children: ReactNode }) {
         }
         verified = {
           expiresAt: result.expiresAt,
-          workspaceResetGeneration: result.workspaceResetGeneration,
         };
         setSession(verified);
         setUnavailable(false);
@@ -110,7 +108,7 @@ function SignedInWorkspace({ children }: { children: ReactNode }) {
     );
   if (!session) return <WorkspaceOpening />;
   return (
-    <Workspace resetGeneration={session.workspaceResetGeneration}>
+    <Workspace>
       <AppShell>{children}</AppShell>
     </Workspace>
   );

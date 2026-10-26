@@ -24,6 +24,12 @@ async function vault(page: Page) {
   );
 }
 
+async function browserLedgerKeys(page: Page) {
+  return page.evaluate(() =>
+    Object.keys(localStorage).filter((key) => /ledger|recovery|personal_workspace/.test(key)),
+  );
+}
+
 async function signIn(page: Page) {
   const response = await page.request.post('/api/auth/session', {
     headers: { Origin: origin },
@@ -59,9 +65,7 @@ test('wrong password stays on login; correct login returns to requested page and
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page).toHaveURL('/accounts');
   await expect(page.getByRole('heading', { name: 'Owner test bank', exact: true })).toBeVisible();
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ember_ledger_v2')!).mode)).toBe(
-    'cloud',
-  );
+  expect(await browserLedgerKeys(page)).toEqual([]);
 });
 
 test('a new device loads the server ledger before opening finance pages', async ({ page }) => {
@@ -87,9 +91,7 @@ test('a new device loads the server ledger before opening finance pages', async 
     release();
   }
   await expect(page.getByRole('heading', { name: 'Owner test bank', exact: true })).toBeVisible();
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('ember_ledger_v2')!));
-  expect(saved.cloudRevision).toBe(3);
-  expect(saved.ledger.accounts[0].name).toBe('Owner test bank');
+  expect(await browserLedgerKeys(page)).toEqual([]);
 });
 
 test('server outage on a new device shows retry instead of an empty workspace', async ({
@@ -100,40 +102,13 @@ test('server outage on a new device shows retry instead of an empty workspace', 
   );
   await signIn(page);
   await page.goto('/dashboard');
-  await expect(
-    page.getByRole('heading', { name: 'Could not load your latest records' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Could not load your records' })).toBeVisible();
   await expect(page.getByText('Vault unavailable')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Open saved browser copy' })).toHaveCount(0);
   await expect(page.locator('.desktop-sidebar')).toHaveCount(0);
 });
 
-test('startup preserves offline edits and marks a server conflict', async ({ page }) => {
-  const local = structuredClone(ledger);
-  local.accounts[0].name = 'Offline bank';
-  await page.addInitScript((data) => {
-    localStorage.setItem(
-      'ember_ledger_v2',
-      JSON.stringify({ ledger: data, revision: 2, cloudRevision: 1, dirty: true, mode: 'cloud' }),
-    );
-  }, local);
-  await page.route('**/api/db', (route) =>
-    route.fulfill({ json: { revision: 2, provider: 'file', data: ledger } }),
-  );
-  await signIn(page);
-  await page.goto('/accounts');
-  await expect(page.getByRole('heading', { name: 'Offline bank', exact: true })).toBeVisible();
-  await expect(
-    page.getByText('This browser has changes that differ from the server.'),
-  ).toBeVisible();
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('ember_ledger_v2')!));
-  expect(saved.dirty).toBe(true);
-  expect(saved.ledger.accounts[0].name).toBe('Offline bank');
-});
-
-test('sign-out closes the workspace and retains the local ledger for the owner to resume', async ({
-  page,
-}) => {
+test('sign-out closes the workspace and leaves no records in the browser', async ({ page }) => {
   await vault(page);
   await signIn(page);
   await page.goto('/settings');
@@ -144,45 +119,38 @@ test('sign-out closes the workspace and retains the local ledger for the owner t
   await expect(settingsSignOut).toBeVisible();
   await settingsSignOut.click();
   await expect(page).toHaveURL('/login');
-  expect(
-    await page.evaluate(
-      () => JSON.parse(localStorage.getItem('ember_ledger_v2')!).ledger.accounts[0].name,
-    ),
-  ).toBe('Owner test bank');
+  expect(await browserLedgerKeys(page)).toEqual([]);
   await page.goto('/accounts');
   await expect(page).toHaveURL(/\/login/);
   await expect(page.getByRole('heading', { name: 'Owner test bank', exact: true })).toHaveCount(0);
   expect((await page.request.get('/api/db')).status()).toBe(401);
 });
 
-test('sign-out preserves unsynced edits after a single confirmation', async ({ page }) => {
-  await vault(page);
+test('signing out while a change is still saving asks once before discarding it', async ({
+  page,
+}) => {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/api/db', async (route) => {
+    if (route.request().method() === 'POST') await held;
+    await route.fulfill({ json: { revision: 1, provider: 'file', data: ledger } });
+  });
   await signIn(page);
   await page.goto('/settings');
-  const settingsSignOut = page.locator('#workspace-content').getByRole('button', {
-    name: 'Sign out',
-    exact: true,
-  });
-  await expect(settingsSignOut).toBeVisible();
-  await page.evaluate(() => {
-    const state = JSON.parse(localStorage.getItem('ember_ledger_v2')!);
-    state.ledger.settings.givingPercent = 2.5;
-    state.revision++;
-    state.dirty = true;
-    localStorage.setItem('ember_ledger_v2', JSON.stringify(state));
-    window.dispatchEvent(new Event('ember_ledger_changed'));
-  });
+  await page.getByLabel('Suggested income giving reserve (%)').fill('2.5');
+  await page.getByRole('button', { name: 'Save giving suggestion' }).click();
   let confirmations = 0;
   page.on('dialog', async (dialog) => {
     confirmations++;
     await dialog.accept();
   });
-  await settingsSignOut.click();
+  await page
+    .locator('#workspace-content')
+    .getByRole('button', { name: 'Sign out', exact: true })
+    .click();
   await expect(page).toHaveURL('/login');
   expect(confirmations).toBe(1);
-  const retained = await page.evaluate(() => JSON.parse(localStorage.getItem('ember_ledger_v2')!));
-  expect(retained.dirty).toBe(true);
-  expect(retained.ledger.settings.givingPercent).toBe(2.5);
+  release();
 });
 
 test('a session removed while a finance page is open locks the workspace on focus', async ({
@@ -212,7 +180,6 @@ test('session expiry closes an open workspace without a navigation or focus even
         configured: true,
         authenticated: true,
         expiresAt,
-        workspaceResetGeneration: null,
       },
     }),
   );
@@ -226,26 +193,12 @@ test('session expiry closes an open workspace without a navigation or focus even
 test('unreachable session verification never reveals a cached financial workspace', async ({
   page,
 }) => {
+  await vault(page);
   await signIn(page);
-  await page.addInitScript(
-    (data) =>
-      localStorage.setItem(
-        'ember_ledger_v2',
-        JSON.stringify({
-          ledger: data,
-          revision: 1,
-          cloudRevision: 1,
-          dirty: false,
-          mode: 'cloud',
-        }),
-      ),
-    ledger,
-  );
   await page.route('**/api/auth/session', (route) => route.abort());
   await page.goto('/accounts');
   await expect(page.getByRole('heading', { name: 'Could not verify sign-in' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Owner test bank', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Download recovery copy' })).toHaveCount(0);
 });
 
 test('login fits mobile and desktop with accessible controls and no page errors', async ({

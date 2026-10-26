@@ -119,45 +119,34 @@ function fixture() {
   ];
   return ledger;
 }
-async function seed(page: Page) {
-  await page.addInitScript((ledger) => {
-    if (!localStorage.getItem('test-initialized')) {
-      localStorage.setItem(
-        'ember_ledger_v2',
-        JSON.stringify({ ledger, revision: 1, cloudRevision: 1, dirty: false, mode: 'cloud' }),
-      );
-      localStorage.setItem('test-initialized', 'true');
-    }
-  }, fixture());
-}
+// Interaction tests run against a per-test stand-in for /api/db that applies the
+// same revision rules as the real handler. API and refresh cases use the real vault.
+let db: { revision: number; data: ReturnType<typeof fixture> };
 test.beforeEach(async ({ page, context }) => {
-  await seed(page);
+  db = { revision: 1, data: fixture() };
   const signedIn = await page.request.post('/api/auth/session', {
     headers: { Origin: 'http://localhost:3100' },
     data: { password: 'ember-e2e-only-owner-password' },
   });
   expect(signedIn.status()).toBe(200);
-  // Keep interaction fixtures independent of the test vault and of other tests.
-  // Dedicated API/cloud cases below use the temporary real server vault instead.
   await context.route('**/api/db', async (route) => {
     if (route.request().method() === 'POST') {
       const sent = route.request().postDataJSON();
-      await route.fulfill({ json: { revision: sent.expectedRevision + 1, provider: 'file' } });
+      if (sent.expectedRevision !== db.revision) {
+        await route.fulfill({ status: 409, json: { error: 'Stale revision' } });
+        return;
+      }
+      db = { revision: db.revision + 1, data: sent.data };
+      await route.fulfill({ json: { revision: db.revision, provider: 'file' } });
       return;
     }
-    const frame = route.request().frame();
-    let state;
-    try {
-      state = await frame.evaluate(() => JSON.parse(localStorage.getItem('ember_ledger_v2')!));
-    } catch (error) {
-      if (frame.isDetached() || frame.page().isClosed()) return;
-      throw error;
-    }
-    await route.fulfill({
-      json: { data: state.ledger, revision: state.cloudRevision ?? 0, provider: 'file' },
-    });
+    await route.fulfill({ json: { data: db.data, revision: db.revision, provider: 'file' } });
   });
 });
+const browserLedgerKeys = (page: Page) =>
+  page.evaluate(() =>
+    Object.keys(localStorage).filter((key) => /ledger|recovery|personal_workspace/.test(key)),
+  );
 
 test('cached records remain hidden when the session endpoint cannot verify access', async ({
   page,
@@ -176,7 +165,6 @@ test('a failed server sign-out stays visible and does not claim success', async 
         configured: true,
         authenticated: true,
         expiresAt: Date.now() + 12 * 3600000,
-        workspaceResetGeneration: null,
       },
     }),
   );
@@ -207,7 +195,6 @@ test('an open dashboard refreshes its month and totals after the Dhaka calendar 
         configured: true,
         authenticated: true,
         expiresAt: before.getTime() + 12 * 3600000,
-        workspaceResetGeneration: null,
       },
     }),
   );
@@ -231,18 +218,14 @@ test('an open dashboard refreshes its month and totals after the Dhaka calendar 
   );
 });
 
-test('mounted coach checks respond to changed ledger preferences', async ({ page }) => {
+test('returning to the tab shows preferences changed on another device', async ({ page }) => {
   await page.goto('/coach');
   await expect(page.getByText('Target: Your target: 20%', { exact: true })).toBeVisible();
   await page.waitForLoadState('networkidle');
-  await page.evaluate(() => {
-    const state = JSON.parse(localStorage.getItem('ember_ledger_v2')!);
-    state.ledger.settings.savingsTargetPercent = 35;
-    state.revision++;
-    state.dirty = true;
-    localStorage.setItem('ember_ledger_v2', JSON.stringify(state));
-    window.dispatchEvent(new Event('ember_ledger_changed'));
-  });
+  const changed = structuredClone(db.data);
+  changed.settings.savingsTargetPercent = 35;
+  db = { revision: db.revision + 1, data: changed };
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page.getByText('Target: Your target: 35%', { exact: true })).toBeVisible();
 });
 
@@ -289,67 +272,25 @@ test('all pages hydrate without runtime errors and fit desktop, tablet, and phon
   }
   expect(errors).toEqual([]);
 });
-test('owner-authorized fresh start clears old browser copies once and preserves new records on reload', async ({
-  page,
-}) => {
-  await page.route('**/api/auth/session', (route) =>
-    route.fulfill({
-      json: {
-        configured: true,
-        authenticated: true,
-        expiresAt: Date.now() + 12 * 3600000,
-        workspaceResetGeneration: '00000000-0000-4000-8000-000000000001',
-      },
-    }),
-  );
-  await page.addInitScript(() => {
-    if (!localStorage.getItem('reset-fixture-initialized')) {
-      localStorage.setItem('ember_recovery_v2', 'old recovery');
-      localStorage.setItem('ember_personal_workspace', 'old personal copy');
-      sessionStorage.setItem('ember_pending', 'old pending');
-      localStorage.setItem('reset-fixture-initialized', 'true');
-    }
-  });
+test('records are read from the database and never stored in the browser', async ({ page }) => {
   await page.goto('/accounts');
-  await expect(
-    page.getByRole('heading', { name: 'Accounts & transfers', exact: true }),
-  ).toBeVisible();
-  await page.waitForLoadState('networkidle');
-  const first = await page.evaluate(() => ({
-    ledger: JSON.parse(localStorage.getItem('ember_ledger_v2')!).ledger,
-    recovery: localStorage.getItem('ember_recovery_v2'),
-    personal: localStorage.getItem('ember_personal_workspace'),
-    pending: sessionStorage.getItem('ember_pending'),
-  }));
-  expect(first.ledger.accounts).toEqual([]);
-  expect(first.ledger.transactions).toEqual([]);
-  // Connecting the empty cloud ledger can create a new valid recovery copy;
-  // the pre-reset recovery data must never survive.
-  expect(first.recovery).not.toBe('old recovery');
-  if (first.recovery) expect(JSON.parse(first.recovery).ledger.accounts).toEqual([]);
-  expect(first.personal).toBeNull();
-  expect(first.pending).toBeNull();
-  await page.evaluate((accounts) => {
-    const state = JSON.parse(localStorage.getItem('ember_ledger_v2')!);
-    state.ledger.accounts = accounts;
-    state.revision++;
-    localStorage.setItem('ember_ledger_v2', JSON.stringify(state));
-  }, fixture().accounts);
-  await page.reload();
   await expect(page.getByText('Local Bank', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit Local Bank' }).click();
+  await page.getByRole('dialog').getByLabel('Account name').fill('Renamed Bank');
+  await page.getByRole('dialog').getByRole('button', { name: 'Save account' }).click();
+  await expect.poll(() => db.data.accounts.find((a) => a.id === 'bdt')?.name).toBe('Renamed Bank');
+  expect(await browserLedgerKeys(page)).toEqual([]);
+  await page.reload();
+  await expect(page.getByText('Renamed Bank', { exact: true })).toBeVisible();
 });
 
 test('existing future-dated postings open with a review notice instead of blocking startup', async ({
   page,
 }) => {
-  await page.goto('/accounts');
-  await expect(
-    page.getByRole('heading', { name: 'Accounts & transfers', exact: true }),
-  ).toBeVisible();
-  await page.waitForLoadState('networkidle');
   const futureDate = `${shiftMonth(localMonth(), 1)}-01`;
-  await page.evaluate((date) => {
-    const state = JSON.parse(localStorage.getItem('ember_ledger_v2')!);
+  {
+    const date = futureDate;
+    const state = { ledger: db.data };
     state.ledger.transactions[0].date = date;
     state.ledger.transfers.push({
       id: 'legacy-future-transfer',
@@ -363,18 +304,17 @@ test('existing future-dated postings open with a review notice instead of blocki
       date,
       createdAt: date,
     });
-    localStorage.setItem('ember_ledger_v2', JSON.stringify(state));
-  }, futureDate);
-  await page.reload();
+  }
+  await page.goto('/accounts');
   await expect(
     page.getByRole('heading', { name: 'Accounts & transfers', exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole('status').filter({ hasText: '2 future-dated records are marked done' }),
   ).toBeVisible();
-  const saved = await page.evaluate(
-    () => JSON.parse(localStorage.getItem('ember_ledger_v2')!).ledger,
-  );
+  // Opening the workspace must not rewrite the stored records.
+  expect(db.revision).toBe(1);
+  const saved = db.data;
   expect(saved.transactions[0].date).toBe(futureDate);
   expect(saved.transactions[0].status).toBe('done');
   expect(saved.transfers[0].status).toBeUndefined();
@@ -415,11 +355,8 @@ test('quick add opens a labeled dialog, keeps focus, and saves in account curren
   await dialog.getByRole('button', { name: 'Save activity' }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole('button', { name: 'Edit Market' })).toBeVisible();
-  const tx = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('ember_ledger_v2')!).ledger.transactions.find(
-      (t: { merchant: string }) => t.merchant === 'Market',
-    ),
-  );
+  await expect.poll(() => db.data.transactions.some((t) => t.merchant === 'Market')).toBe(true);
+  const tx = db.data.transactions.find((t) => t.merchant === 'Market')!;
   expect(tx.currency).toBe('BDT');
   expect(tx.amountMinor).toBe(120000);
   await page.getByRole('button', { name: 'Add activity', exact: true }).last().click();
@@ -443,7 +380,8 @@ test('transfer records both principal legs and fees, previews balances, and can 
   await expect(dialog.getByText('NSave debit: $105')).toBeVisible();
   await dialog.getByRole('button', { name: 'Record transfer' }).click();
   await expect(dialog).toBeHidden();
-  const s = await page.evaluate(() => JSON.parse(localStorage.getItem('ember_ledger_v2')!).ledger);
+  await expect.poll(() => db.data.transfers.length).toBe(1);
+  const s = db.data;
   expect(s.transfers).toHaveLength(1);
   expect(s.transfers[0].amountOutMinor).toBe(10000);
   expect(s.transfers[0].amountInMinor).toBe(1200000);
@@ -461,46 +399,51 @@ test('goal reservations cannot claim more than the source account holds', async 
   await expect(dialog.getByRole('alert')).toContainText('Insufficient');
   await expect(dialog).toBeVisible();
 });
-test('invalid restore is rejected, valid archive previews before replacement', async ({ page }) => {
+test('invalid restore is rejected, a valid backup previews and then replaces the database copy', async ({
+  page,
+}) => {
   await page.goto('/settings');
-  await page.getByLabel('Preview a JSON archive').setInputFiles({
+  await page.getByLabel('Preview a JSON backup').setInputFiles({
     name: 'bad.json',
     mimeType: 'application/json',
     buffer: Buffer.from('{"accounts":[{"id":"broken"}]}'),
   });
   await expect(page.locator('main').getByRole('alert')).toBeVisible();
-  await page.getByLabel('Preview a JSON archive').setInputFiles({
+  await page.getByLabel('Preview a JSON backup').setInputFiles({
     name: 'valid.json',
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(fixture())),
   });
-  await expect(page.getByText(/Validated archive: 2 accounts/)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Restore this archive' })).toBeVisible();
+  await expect(page.getByText(/Valid backup: 2 accounts/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Restore this backup' })).toBeVisible();
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Restore this archive' }).click();
+  await page.getByRole('button', { name: 'Restore this backup' }).click();
   await expect(
-    page.getByText('Archive restored. Review account balances before continuing.'),
+    page.getByText('Backup restored. Review account balances before continuing.'),
   ).toBeVisible();
-  expect(await page.evaluate(() => !!localStorage.getItem('ember_recovery_v2'))).toBe(true);
+  expect(db.revision).toBe(2);
+  expect(db.data.accounts.map((a) => a.id)).toEqual(['usd', 'bdt']);
 });
-test('only one tab can edit and a waiting tab opens automatically after release', async ({
+test('a change from a stale second tab is rejected and that tab shows the saved records', async ({
   page,
   context,
 }) => {
-  await page.goto('/dashboard');
-  await expect(page.locator('main h1')).toBeVisible();
+  await page.goto('/accounts');
   const second = await context.newPage();
   await second.goto('/accounts');
-  await expect(second.getByRole('heading', { name: 'Workspace editing is paused' })).toBeVisible();
-  await page.close();
-  await expect(
-    second.getByRole('heading', { name: 'Accounts & transfers', exact: true }),
-  ).toBeVisible();
   await expect(second.getByText('Local Bank', { exact: true })).toBeVisible();
-  await second.reload();
+  await page.getByRole('button', { name: 'Edit Local Bank' }).click();
+  await page.getByRole('dialog').getByLabel('Account name').fill('First tab name');
+  await page.getByRole('dialog').getByRole('button', { name: 'Save account' }).click();
+  await expect.poll(() => db.data.accounts[1].name).toBe('First tab name');
+  await second.getByRole('button', { name: 'Edit Local Bank' }).click();
+  await second.getByRole('dialog').getByLabel('Account name').fill('Second tab name');
+  await second.getByRole('dialog').getByRole('button', { name: 'Save account' }).click();
+  await expect(second.getByText('First tab name', { exact: true })).toBeVisible();
   await expect(
-    second.getByRole('heading', { name: 'Accounts & transfers', exact: true }),
+    second.getByRole('alert').filter({ hasText: 'another device or tab' }),
   ).toBeVisible();
+  expect(db.data.accounts[1].name).toBe('First tab name');
   await second.close();
 });
 test('API rejects anonymous and cross-origin writes; owner sync rejects stale revisions', async ({
@@ -585,38 +528,26 @@ test('core pages have no automatically detected WCAG AA violations', async ({ pa
     appearance.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) })),
   ).toEqual([]);
 });
-test('cloud pull refreshes the mounted account page without replacing dirty edits', async ({
+test('with the real database, edits made elsewhere appear when returning to the tab', async ({
   page,
   context,
 }) => {
   await context.unroute('**/api/db');
   const origin = 'http://localhost:3100';
-  await page.request.post('/api/auth/session', {
-    headers: { Origin: origin },
-    data: { password: 'ember-e2e-only-owner-password' },
-  });
-  const current = await (await page.request.get('/api/db')).json();
-  const remote = fixture();
-  remote.accounts[0].name = 'Cloud NSave';
-  const saved = await page.request.post('/api/db', {
-    headers: { Origin: origin },
-    data: { expectedRevision: current.revision, data: remote },
-  });
-  expect(saved.status()).toBe(200);
-  await page.goto('/dashboard');
-  await expect(page.locator('main h1')).toBeVisible();
-  await page.evaluate((revision) => {
-    const s = JSON.parse(localStorage.getItem('ember_ledger_v2')!);
-    s.mode = 'cloud';
-    s.cloudRevision = revision;
-    s.dirty = false;
-    localStorage.setItem('ember_ledger_v2', JSON.stringify(s));
-  }, current.revision);
+  const write = async (name: string) => {
+    const current = await (await page.request.get('/api/db')).json();
+    const data = fixture();
+    data.accounts[0].name = name;
+    const saved = await page.request.post('/api/db', {
+      headers: { Origin: origin },
+      data: { expectedRevision: current.revision, data },
+    });
+    expect(saved.status()).toBe(200);
+  };
+  await write('Cloud NSave');
   await page.goto('/accounts');
   await expect(page.getByRole('heading', { name: 'Cloud NSave', exact: true })).toBeVisible();
-  expect(
-    await page.evaluate(
-      () => JSON.parse(localStorage.getItem('ember_ledger_v2')!).ledger.accounts[0].name,
-    ),
-  ).toBe('Cloud NSave');
+  await write('Phone NSave');
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('heading', { name: 'Phone NSave', exact: true })).toBeVisible();
 });

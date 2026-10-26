@@ -52,10 +52,6 @@ async function main() {
       'MANUAL Confirm a persistent private volume, one Node host, and independent volume backups.',
     );
   }
-  if (process.env.EMBER_WORKSPACE_RESET_GENERATION)
-    console.log(
-      'REVIEW An existing reset generation is configured. Keep it stable; never rotate it for a routine deployment.',
-    );
   if (process.env.EMBER_ENABLE_EXTERNAL_AI === 'true') {
     check(Boolean(process.env.GEMINI_API_KEY), 'External AI has a provider credential');
     check(Boolean(process.env.GEMINI_MODEL), 'External AI model is explicitly configured');

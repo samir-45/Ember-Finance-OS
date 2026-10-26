@@ -67,12 +67,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <Header onOpenMobileNav={() => setMobileOpen(true)} />
         <main id="workspace-content" className="workspace-main" style={{ width: '100%', flex: 1 }}>
-          {(sync.state === 'conflict' || sync.state === 'error') && (
+          {sync.state === 'error' && (
             <aside className="ember-glass settings-card" role="alert" style={{ marginBottom: 24 }}>
-              {sync.state === 'conflict'
-                ? 'This browser has changes that differ from the server. Both copies are preserved.'
-                : 'The latest server copy could not be checked. You are viewing the saved browser copy.'}{' '}
-              <Link href="/settings">Review storage in Settings</Link>.
+              {sync.error}
             </aside>
           )}
           {!ledger.exchangeRates.some(

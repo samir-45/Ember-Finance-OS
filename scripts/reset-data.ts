@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { closeDb, getPool, isDatabaseConfigured } from '../src/lib/db';
 import { emptyLedger } from '../src/lib/ledger';
 
@@ -123,15 +122,7 @@ async function main() {
       filesRemoved++;
     }
   }
-  const envPath = path.resolve('.env');
-  const original = await fs.readFile(envPath, 'utf8');
-  const generation = randomUUID();
-  const line = `EMBER_WORKSPACE_RESET_GENERATION=${generation}`;
-  const next = /^EMBER_WORKSPACE_RESET_GENERATION=.*$/m.test(original)
-    ? original.replace(/^EMBER_WORKSPACE_RESET_GENERATION=.*$/m, line)
-    : `${original.trimEnd()}\n\n# Owner-authorized fresh start; each browser clears Ember storage once.\n${line}\n`;
-  await fs.writeFile(envPath, next, { mode: 0o600 });
-  console.log(JSON.stringify({ vaultFilesRemoved: filesRemoved, browserResetScheduled: true }));
+  console.log(JSON.stringify({ vaultFilesRemoved: filesRemoved }));
 }
 void main()
   .catch(() => {

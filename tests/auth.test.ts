@@ -78,12 +78,10 @@ test('missing owner password or independent session secret fails closed', () => 
   }
 });
 
-test('session endpoint reports expiry, hides reset metadata from visitors and rejects cross-origin login', async () => {
-  process.env.EMBER_WORKSPACE_RESET_GENERATION = '00000000-0000-4000-8000-000000000001';
+test('session endpoint reports expiry and rejects cross-origin login', async () => {
   const anonymous = await (await GET(request('/api/auth/session'))).json();
   assert.equal(anonymous.authenticated, false);
   assert.equal(anonymous.expiresAt, null);
-  assert.equal(anonymous.workspaceResetGeneration, null);
   const token = createSession();
   const signed = await GET(request('/api/auth/session', token));
   const body = await signed.json();

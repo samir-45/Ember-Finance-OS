@@ -1,5 +1,5 @@
 'use client';
-import { store } from '@/lib/store';
+import { discardUnsavedChanges, hasUnsavedChanges } from '@/lib/sync';
 import { LogOut } from 'lucide-react';
 import { useState } from 'react';
 
@@ -10,9 +10,8 @@ export function OwnerSignOutButton() {
   const signOut = async () => {
     if (busy) return;
     if (
-      store.getLocalState().dirty &&
-      store.getLocalState().mode === 'cloud' &&
-      !window.confirm('There are unsynced changes. Keep them in this browser and sign out?')
+      hasUnsavedChanges() &&
+      !window.confirm('A change is still being saved. Sign out anyway and lose it?')
     )
       return;
 
@@ -24,7 +23,7 @@ export function OwnerSignOutButton() {
         signal: AbortSignal.timeout(10000),
       });
       if (!response.ok) throw new Error('Could not sign out. Please retry.');
-      if (store.getLocalState().mode !== 'demo') store.setMode('browser');
+      discardUnsavedChanges();
       window.location.replace('/login');
     } catch {
       setBusy(false);

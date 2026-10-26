@@ -27,18 +27,15 @@ Before recording activity, set your USD/BDT reference rate in Settings. The init
 
 ## Storage and privacy
 
-- Browser records and JSON exports are readable financial data; application-level encryption is not implemented.
+- The database is the only copy of your records. Nothing financial is stored in the browser; only appearance settings are kept there. JSON exports are readable financial data; application-level encryption is not implemented.
 - Anonymous visitors are redirected to `/login` before finance pages render. Missing owner credentials keep access locked.
-- Sign-in loads the latest server ledger before opening finance pages, including on a new device. Browser storage keeps a local working copy and pending edits; signing out retains it but closes the workspace. If the vault is unavailable during startup, retry or explicitly open an existing saved browser copy.
-- Each edit saves locally immediately and queues a background server upload on the next event loop turn. New edits made during an upload are sent afterward. Pending changes retry when the browser comes online or regains focus; confirm the synced status before closing a device that has unsynced edits.
+- Sign-in loads the ledger from the database before opening finance pages, on every device. If the database is unavailable, a retry screen is shown instead of any stale or empty copy. Returning to an open tab reloads the latest records.
+- Each change is saved to the database as you make it; changes made during a save are sent right after it. If a save fails, the app reloads what the database holds and says the change was not saved. Leaving the page while a save is in flight asks first.
 - Sessions expire after 12 hours. Open pages return to sign-in at expiry or when the server rejects the session. A fresh page requires successful session verification before loading local records.
 - Server synchronization requires the owner password and an HTTP-only session cookie. Every ledger and AI handler verifies authorization and request origin.
-- A server save replaces one complete, validated ledger atomically, using an expected revision. Previous server revisions are retained. Concurrent edits cause a visible conflict instead of silent replacement.
-- Browser saves use one atomic localStorage snapshot. A single active editing tab is enforced with Web Locks. Use HTTPS or localhost and a browser supporting Web Locks.
-- Dirty offline changes are preserved on reconnect. Settings provides explicit conflict review and downloads for both copies.
+- A save replaces one complete, validated ledger atomically, using an expected revision. Previous revisions are retained. A change from a tab or device that is behind is rejected, and that tab reloads the saved records.
 - PostgreSQL errors do not silently fall back to files. A file vault must be explicitly configured on durable storage.
 - External AI is disabled by default. Requests require owner sign-in, the server allow switch, both privacy preferences, and an explicit user action. Entry text and financial summaries may be sent to Google when enabled.
-- Demo data cannot switch directly into cloud mode. Return to the saved personal workspace first.
 
 ## Owner access and server configuration
 
@@ -58,9 +55,7 @@ Then sign in at `/login`. The latest server ledger loads before the workspace op
 
 ## Recovery
 
-Settings exports a complete versioned JSON ledger, previews and validates imports, and saves a pre-restore recovery copy. Restore replaces the active browser ledger; a connected server save still requires its current revision. Settings no longer offers a ledger reset or demo creation. Restoring an archive does not securely erase historical backups.
-
-Legacy browser keys remain untouched during migration. Invalid currencies/references stop migration with a recovery download rather than silently changing amounts. Legacy budgets with no calendar month remain `unassigned` until you assign a month in Budgets. Legacy transactions without an FX reporting rate use the reference rate present at import; verify it against original records if historical precision matters.
+Settings exports a complete versioned JSON ledger and previews and validates imports. Restoring replaces your records in the database; the replaced version stays in the database history. Restoring an archive does not securely erase historical backups.
 
 CSV export includes income, expenses, both transfer legs, fees, original currencies, IDs, status, and reporting rate. Text fields escape quotes and protect against spreadsheet formula interpretation. JSON is the complete recovery format.
 

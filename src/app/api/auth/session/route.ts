@@ -17,9 +17,6 @@ export async function GET(req: Request) {
       configured: authConfigured(),
       authenticated: session !== null,
       expiresAt: session?.expiresAt ?? null,
-      workspaceResetGeneration: session
-        ? process.env.EMBER_WORKSPACE_RESET_GENERATION || null
-        : null,
     },
     { headers: { 'Cache-Control': 'no-store' } },
   );

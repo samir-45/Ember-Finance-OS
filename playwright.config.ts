@@ -32,7 +32,6 @@ export default defineConfig({
       EMBER_SESSION_SECRET: 'ember-e2e-only-session-secret-at-least-32-characters',
       EMBER_PUBLIC_URL: 'http://localhost:3100',
       EMBER_ENABLE_EXTERNAL_AI: 'false',
-      EMBER_WORKSPACE_RESET_GENERATION: '',
       GEMINI_API_KEY: 'disabled-browser-test',
     },
   },

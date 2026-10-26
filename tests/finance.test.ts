@@ -14,29 +14,10 @@ import {
 } from '../src/lib/finance';
 import { availableOf, balanceOf, emptyLedger, normalizeLedger } from '../src/lib/ledger';
 import { runRulesEngine } from '../src/lib/rules-engine';
-import { LEDGER_KEY, store } from '../src/lib/store';
+import { store } from '../src/lib/store';
 import type { LedgerSnapshot, Transaction } from '../src/types';
 
-class MemoryStorage {
-  data = new Map<string, string>();
-  fail = false;
-  getItem(key: string) {
-    return this.data.get(key) ?? null;
-  }
-  setItem(key: string, value: string) {
-    if (this.fail) throw new Error('Quota exceeded');
-    this.data.set(key, value);
-  }
-  removeItem(key: string) {
-    this.data.delete(key);
-  }
-  clear() {
-    this.data.clear();
-  }
-}
-const storage = new MemoryStorage();
 Object.defineProperty(globalThis, 'window', { configurable: true, value: new EventTarget() });
-Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage });
 function fixture(): LedgerSnapshot {
   const s = emptyLedger();
   s.accounts = [
@@ -82,21 +63,9 @@ const expense = (overrides: Partial<Transaction> = {}): Transaction => ({
   reportingRate: 120,
   ...overrides,
 });
-function load(s = fixture()) {
-  storage.setItem(
-    LEDGER_KEY,
-    JSON.stringify({
-      ledger: s,
-      revision: Math.floor(Math.random() * 100000) + 1,
-      cloudRevision: null,
-      mode: 'browser',
-      dirty: false,
-    }),
-  );
-}
+// Fixtures live only in memory; hydrated ledgers are never sent to a database.
+const load = (s = fixture()) => store.hydrate(s);
 beforeEach(() => {
-  storage.fail = false;
-  storage.clear();
   load();
 });
 
@@ -107,9 +76,9 @@ test('currency mismatches, orphan references, invalid dates, and unsafe money ar
     { date: '2026-02-30' },
     { amountMinor: Number.MAX_SAFE_INTEGER + 1 },
   ]) {
-    const before = storage.getItem(LEDGER_KEY);
+    const before = JSON.stringify(store.getSnapshot());
     assert.throws(() => store.createTransaction(expense(values)));
-    assert.equal(storage.getItem(LEDGER_KEY), before);
+    assert.equal(JSON.stringify(store.getSnapshot()), before);
   }
 });
 test('future settled entries are rejected, pending entries do not alter balances', () => {
@@ -137,18 +106,10 @@ test('existing future-dated postings remain readable, unchanged, and excluded fr
       createdAt: date,
     },
   ];
-  for (const legacy of [false, true]) {
-    storage.clear();
-    if (legacy) {
-      for (const [key, value] of Object.entries(s)) {
-        if (key !== 'version') storage.setItem(`ember_${key}`, JSON.stringify(value));
-      }
-    } else load(s);
-    const original = storage.getItem(legacy ? 'ember_transactions' : LEDGER_KEY);
-    store.initialize();
+  {
+    load(s);
     assert.deepEqual(store.getTransactions(), s.transactions);
-    assert.deepEqual(store.getTransfers(), legacy ? normalizeLedger(s).transfers : s.transfers);
-    assert.equal(storage.getItem(legacy ? 'ember_transactions' : LEDGER_KEY), original);
+    assert.deepEqual(store.getTransfers(), s.transfers);
     assert.equal(balanceOf(store.getSnapshot(), 'bdt'), 10000000);
     assert.equal(balanceOf(store.getSnapshot(), 'usd'), 100000);
     assert.equal(monthlyTotals(date.slice(0, 7)).expenses.bdtMinor, 0);
@@ -471,13 +432,6 @@ test('purchase goals are excluded from runway while explicitly designated emerge
   store.updateGoal(g.id, { isEmergency: true });
   assert.equal(computeRunway().months, before);
 });
-test('failed storage writes propagate and preserve the previous complete snapshot', () => {
-  const before = storage.getItem(LEDGER_KEY);
-  storage.fail = true;
-  assert.throws(() => store.createTransaction(expense()), /Quota/);
-  assert.equal(storage.getItem(LEDGER_KEY), before);
-  assert.equal(store.getTransactions().length, 0);
-});
 test('backup restore preserves transfers, preferences, month fields and deletions', () => {
   store.createTransaction(expense());
   const original = JSON.parse(JSON.stringify(store.getSnapshot()));
@@ -486,11 +440,11 @@ test('backup restore preserves transfers, preferences, month fields and deletion
   assert.deepEqual(store.getSnapshot(), normalizeLedger(original));
   store.deleteTransaction('expense');
   assert.equal(store.getSnapshot().transactions.length, 0);
-  const before = storage.getItem(LEDGER_KEY);
+  const before = JSON.stringify(store.getSnapshot());
   assert.throws(() =>
     store.importAll({ ...original, transactions: [expense({ accountId: 'missing' })] }),
   );
-  assert.equal(storage.getItem(LEDGER_KEY), before);
+  assert.equal(JSON.stringify(store.getSnapshot()), before);
 });
 test('complete restore round trip retains funded goals, allocations, reconciliation, bills, and FX', () => {
   store.createTransfer({
@@ -609,11 +563,6 @@ test('repeated giving payment requests with the same operation ID are idempotent
   store.payAllocation(a.id, 10000, localDate(), 'giving', 'payment-1');
   assert.equal(store.getAllocations()[0].amountMinor, 90000);
   assert.equal(store.getTransactions().length, 1);
-});
-test('demo workspaces cannot switch directly into browser or cloud storage modes', () => {
-  store.setMode('demo');
-  assert.throws(() => store.setMode('cloud'));
-  assert.throws(() => store.setMode('browser'));
 });
 test('accounts with history cannot be removed or have currency reinterpreted', () => {
   store.createTransaction(expense());
