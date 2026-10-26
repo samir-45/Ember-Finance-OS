@@ -401,6 +401,39 @@ test('recording activity can use a suggested category or create a new one', asyn
     })
     .toBe(true);
 });
+test('errors from browser extensions are ignored while Ember errors still show', async ({
+  page,
+}) => {
+  await page.goto('/subscriptions');
+  await expect(page.getByRole('heading', { name: 'Bills & subscriptions' })).toBeVisible();
+  // An extension script injected into the page, like the one that throws "reading 'M_ID'".
+  await page.addScriptTag({
+    content:
+      'setTimeout(() => { throw new TypeError("Cannot read properties of undefined (reading \'M_ID\')"); });',
+  });
+  await page.waitForTimeout(300);
+  await expect(page.locator('.error-banner')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add bill' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.locator('#subscriptions-field-0').fill('Test bill');
+  await dialog.locator('#subscriptions-field-1').fill('0');
+  await dialog.getByRole('button', { name: 'Save Subscription' }).click();
+  await expect(page.locator('.error-banner')).toContainText('positive bill amount');
+});
+test('reconciling with a different real balance can fix the account to match', async ({ page }) => {
+  await page.goto('/accounts');
+  await page.getByRole('button', { name: 'Reconcile Local Bank' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Check your real balance' });
+  await dialog.getByLabel('Real balance (BDT)').fill('83650');
+  await expect(dialog.getByRole('status')).toContainText('less than Ember shows');
+  await dialog.getByRole('button', { name: /Fix balance/ }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText(/balance adjustment\. Local Bank now matches/)).toBeVisible();
+  await expect(page.getByText(/Matched your statement on/)).toBeVisible();
+  await expect
+    .poll(() => db.data.transactions.find((t) => t.merchant === 'Balance adjustment')?.amountMinor)
+    .toBe(35000);
+});
 test('transfer records both principal legs and fees, previews balances, and can be corrected', async ({
   page,
 }) => {
