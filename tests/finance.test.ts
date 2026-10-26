@@ -593,3 +593,27 @@ test('categories added while recording reuse matching names and keep built-in id
   assert.equal(store.getCategories().filter((c) => c.name.toLowerCase() === 'pets').length, 1);
   assert.throws(() => store.ensureCategory({ name: '   ', type: 'expense' }), /category name/);
 });
+test('reconciling can add one balance adjustment so the account matches the statement', () => {
+  const ledger = fixture();
+  ledger.categories = ledger.categories.filter((c) => c.id !== 'other-income');
+  load(ledger);
+  store.reconcile('bdt', 9965000, localDate(), { adjust: true });
+  let s = store.getSnapshot();
+  assert.equal(balanceOf(s, 'bdt'), 9965000);
+  const spent = s.transactions.find((t) => t.tags.includes('reconciliation'))!;
+  assert.equal(spent.type, 'expense');
+  assert.equal(spent.amountMinor, 35000);
+  assert.equal(spent.categoryId, 'other');
+  assert.equal(store.getAccounts()[1].reconciledAt, localDate());
+  assert.equal(s.reconciliations[0].differenceMinor, -35000);
+  store.reconcile('bdt', 10000000, localDate(), { adjust: true });
+  s = store.getSnapshot();
+  assert.equal(balanceOf(s, 'bdt'), 10000000);
+  const found = s.transactions.filter((t) => t.tags.includes('reconciliation'))[1];
+  assert.equal(found.type, 'income');
+  assert.equal(found.categoryId, 'other-income');
+  assert.ok(s.categories.some((c) => c.id === 'other-income' && c.type === 'income'));
+  const count = s.transactions.length;
+  store.reconcile('bdt', 10000000, localDate(), { adjust: true });
+  assert.equal(store.getSnapshot().transactions.length, count, 'no adjustment when it matches');
+});

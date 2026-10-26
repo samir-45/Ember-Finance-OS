@@ -47,7 +47,13 @@ function ActiveWorkspace({ children }: { children: ReactNode }) {
   useLedgerVersion();
   const [error, setError] = useState('');
   useEffect(() => {
+    // Browser extensions run scripts inside the page; their errors (e.g. "reading 'M_ID'")
+    // are not Ember's and must not be shown as if an action failed. Ember's own code
+    // always runs from this site's /_next/ bundles.
+    const ownScript = `${window.location.origin}/_next/`;
+    const fromEmber = (source: string | undefined) => Boolean(source?.includes(ownScript));
     const handler = (event: ErrorEvent) => {
+      if (!fromEmber(event.filename)) return;
       setError(
         event.error instanceof Error
           ? event.error.message
@@ -55,12 +61,10 @@ function ActiveWorkspace({ children }: { children: ReactNode }) {
       );
     };
     window.addEventListener('error', handler);
-    const pending = (event: PromiseRejectionEvent) =>
-      setError(
-        event.reason instanceof Error
-          ? event.reason.message
-          : 'The action failed. Please try again.',
-      );
+    const pending = (event: PromiseRejectionEvent) => {
+      if (!(event.reason instanceof Error) || !fromEmber(event.reason.stack)) return;
+      setError(event.reason.message);
+    };
     window.addEventListener('unhandledrejection', pending);
     const unload = (e: BeforeUnloadEvent) => {
       if (hasUnsavedChanges()) {

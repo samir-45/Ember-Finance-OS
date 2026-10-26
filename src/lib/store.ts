@@ -17,9 +17,11 @@ import { addBillingCycle, localDate } from './dates';
 import {
   availableOf,
   balanceOf,
+  CATEGORY_PRESETS,
   emptyLedger,
   isSettled,
   normalizeLedger,
+  presetCategory,
   validateLedger,
 } from './ledger';
 import { queueSave } from './sync';
@@ -330,21 +332,53 @@ export const store = {
       });
       a.amountMinor -= amountMinor;
     }),
-  reconcile: (accountId: string, statementBalanceMinor: number, date = localDate()) =>
+  reconcile: (
+    accountId: string,
+    statementBalanceMinor: number,
+    date = localDate(),
+    // adjust: record the difference as one "Balance adjustment" entry so the account matches.
+    { adjust = false }: { adjust?: boolean } = {},
+  ) =>
     mutateLedger((s) => {
       const account = s.accounts.find((a) => a.id === accountId);
       if (!account) throw new Error('Account not found');
       const ledgerBalanceMinor = balanceOf(s, accountId);
+      const differenceMinor = statementBalanceMinor - ledgerBalanceMinor;
+      if (adjust && differenceMinor !== 0) {
+        const type = differenceMinor > 0 ? 'income' : 'expense';
+        const preset = CATEGORY_PRESETS.find(
+          (p) => p.id === (type === 'income' ? 'other-income' : 'other'),
+        )!;
+        if (!s.categories.some((c) => c.id === preset.id))
+          s.categories.push(presetCategory(preset));
+        s.transactions.push({
+          id: uuid(),
+          accountId,
+          categoryId: preset.id,
+          transferId: null,
+          type,
+          amountMinor: Math.abs(differenceMinor),
+          currency: account.currency,
+          merchant: 'Balance adjustment',
+          note: `Matched to the statement balance on ${date}`,
+          date,
+          tags: ['reconciliation'],
+          paymentMethod: 'Reconciliation',
+          status: 'done',
+          createdAt: new Date().toISOString(),
+          reportingRate: store.getReferenceRate(),
+        });
+      }
       s.reconciliations.push({
         id: uuid(),
         accountId,
         date,
         statementBalanceMinor,
         ledgerBalanceMinor,
-        differenceMinor: statementBalanceMinor - ledgerBalanceMinor,
+        differenceMinor,
         createdAt: new Date().toISOString(),
       });
-      if (statementBalanceMinor === ledgerBalanceMinor) {
+      if (adjust || differenceMinor === 0) {
         account.reconciledAt = date;
         account.reconciledBalanceMinor = statementBalanceMinor;
       }

@@ -46,6 +46,7 @@ export default function AccountsPage() {
   const [reconciling, setReconciling] = useState('');
   const [statement, setStatement] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const from = accounts.find((a) => a.id === fromId),
     to = accounts.find((a) => a.id === toId);
   const previewOut = previewAmount(out),
@@ -172,12 +173,24 @@ export default function AccountsPage() {
                   <p>Free to use: {formatMoney(availableOf(s, a.id), a.currency)}</p>
                 )
               )}
-              {a.reconciledAt && <p>Matched statement on {dateLabel(a.reconciledAt)}</p>}
+              {(() => {
+                const last = s.reconciliations.filter((r) => r.accountId === a.id).at(-1);
+                if (!last) return null;
+                return last.differenceMinor === 0 || a.reconciledAt === last.date ? (
+                  <p>Matched your statement on {dateLabel(last.date)}</p>
+                ) : (
+                  <p>
+                    Statement was {formatMoney(Math.abs(last.differenceMinor), a.currency)}{' '}
+                    {last.differenceMinor < 0 ? 'lower' : 'higher'} on {dateLabel(last.date)}
+                  </p>
+                );
+              })()}
             </div>
             <div className="action-row">
               <button
                 className="btn btn-secondary"
                 onClick={() => setHistory(history === a.id ? '' : a.id)}
+                aria-label={`View ${a.name} ledger`}
               >
                 View ledger
               </button>
@@ -192,9 +205,11 @@ export default function AccountsPage() {
                 className="btn btn-secondary"
                 onClick={() => {
                   setError('');
+                  setNotice('');
                   setReconciling(a.id);
                   setStatement('');
                 }}
+                aria-label={`Reconcile ${a.name}`}
               >
                 Reconcile
               </button>
@@ -312,6 +327,11 @@ export default function AccountsPage() {
           <p>No transfers recorded.</p>
         )}
       </section>
+      {notice && !reconciling && (
+        <p role="status" className="form-success">
+          {notice}
+        </p>
+      )}
       {error && !accountForm && !transferForm && !reconciling && (
         <p role="alert" className="form-error">
           {error}
@@ -639,60 +659,88 @@ export default function AccountsPage() {
         </Dialog>
       )}
       {reconciling && (
-        <Dialog title="Check against a statement" onClose={() => setReconciling('')}>
-          <form
-            className="form-stack"
-            onSubmit={(e) => {
-              e.preventDefault();
+        <Dialog title="Check your real balance" onClose={() => setReconciling('')}>
+          {(() => {
+            const account = accounts.find((a) => a.id === reconciling)!;
+            const recorded = computeAccountBalance(reconciling);
+            const difference = previewStatement === null ? null : previewStatement - recorded;
+            const finish = (adjust: boolean) =>
               guard(() => {
-                store.reconcile(reconciling, toMinor(statement));
+                if (previewStatement === null) throw new Error('Enter the balance you see');
+                store.reconcile(reconciling, previewStatement, localDate(), { adjust });
+                setNotice(
+                  difference === 0
+                    ? `${account.name} matches your real balance.`
+                    : adjust
+                      ? `Added a ${formatMoney(Math.abs(difference!), account.currency)} balance adjustment. ${account.name} now matches.`
+                      : `Noted a ${formatMoney(Math.abs(difference!), account.currency)} difference for ${account.name}.`,
+                );
                 setReconciling('');
               });
-            }}
-          >
-            <p>
-              Compare the current recorded balance with the current settled balance on your account.
-              Pending bank activity may explain differences.
-            </p>
-            <p>
-              Recorded:{' '}
-              {formatMoney(
-                computeAccountBalance(reconciling),
-                accounts.find((a) => a.id === reconciling)!.currency,
-              )}
-            </p>
-            <label htmlFor="statement-balance">
-              Current statement balance
-              <input
-                id="statement-balance"
-                className="input"
-                type="number"
-                step="0.01"
-                required
-                value={statement}
-                onChange={(e) => setStatement(e.target.value)}
-              />
-            </label>
-            {previewStatement !== null && (
-              <p role="status">
-                Difference:{' '}
-                {formatMoney(
-                  previewStatement - computeAccountBalance(reconciling),
-                  accounts.find((a) => a.id === reconciling)!.currency,
+            return (
+              <form
+                className="form-stack"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  finish(difference !== 0);
+                }}
+              >
+                <p>
+                  Ember shows <strong>{formatMoney(recorded, account.currency)}</strong> in{' '}
+                  {account.name}. Enter what your bank app, statement or wallet actually shows.
+                </p>
+                <label htmlFor="statement-balance">
+                  Real balance ({account.currency})
+                  <input
+                    id="statement-balance"
+                    className="input"
+                    type="number"
+                    step="0.01"
+                    inputMode="decimal"
+                    required
+                    autoFocus
+                    value={statement}
+                    onChange={(e) => setStatement(e.target.value)}
+                  />
+                </label>
+                {difference !== null && (
+                  <p role="status">
+                    {difference === 0
+                      ? 'They match.'
+                      : `You have ${formatMoney(Math.abs(difference), account.currency)} ${difference < 0 ? 'less' : 'more'} than Ember shows. This usually means ${difference < 0 ? 'some spending' : 'some income'} wasn't recorded.`}
+                  </p>
                 )}
-              </p>
-            )}
-            <p>
-              Saving records the comparison. It does not alter the ledger. Correct missing or
-              incorrect entries before recording a match.
-            </p>
-            {error && (
-              <p role="alert" className="form-error">
-                {error}
-              </p>
-            )}
-            <button className="btn btn-primary">Save balance comparison</button>
-          </form>
+                {error && (
+                  <p role="alert" className="form-error">
+                    {error}
+                  </p>
+                )}
+                {difference === 0 || difference === null ? (
+                  <button className="btn btn-primary">Mark as matched</button>
+                ) : (
+                  <div className="action-row">
+                    <button className="btn btn-primary">
+                      Fix balance: add {formatMoney(Math.abs(difference), account.currency)}{' '}
+                      {difference < 0 ? 'expense' : 'income'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => finish(false)}
+                    >
+                      Only note the difference
+                    </button>
+                  </div>
+                )}
+                {difference !== null && difference !== 0 && (
+                  <p className="page-subtitle">
+                    The fix adds one “Balance adjustment” entry you can edit or delete later in
+                    Transactions. If you know what's missing, record that instead.
+                  </p>
+                )}
+              </form>
+            );
+          })()}
         </Dialog>
       )}
     </div>
