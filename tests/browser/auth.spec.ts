@@ -137,8 +137,8 @@ test('signing out while a change is still saving asks once before discarding it'
   });
   await signIn(page);
   await page.goto('/settings');
-  await page.getByLabel('Suggested income giving reserve (%)').fill('2.5');
-  await page.getByRole('button', { name: 'Save giving suggestion' }).click();
+  await page.getByLabel('Giving suggestion').fill('2.5');
+  await page.getByLabel('Giving suggestion').press('Enter');
   let confirmations = 0;
   page.on('dialog', async (dialog) => {
     confirmations++;

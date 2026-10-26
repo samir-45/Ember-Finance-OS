@@ -2,6 +2,7 @@
 import { startRegistration } from '@simplewebauthn/browser';
 import { Fingerprint, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { SettingRow } from '@/components/settings/SettingsUI';
 
 type Passkey = { id: string; name: string; createdAt: string; lastUsedAt: string | null };
 type ListResult = { enabled: boolean; passkeys: Passkey[]; error?: string };
@@ -87,67 +88,79 @@ export function PasskeyManager() {
   };
 
   return (
-    <section className="ember-glass settings-card settings-stack">
-      <h2>Passkey sign-in</h2>
-      <p>
-        Add this site on a device you trust. Sign-in uses that device’s fingerprint, face scan, PIN,
-        or security key. Ember receives a cryptographic proof; your biometric stays with the device.
-        Keep your owner password for recovery.
-      </p>
-      {!state.enabled ? (
-        <p role="status">Passkeys require PostgreSQL and the canonical site origin to be configured.</p>
-      ) : (
-        <>
-          {state.passkeys.length > 0 && (
-            <ul className="passkey-list" aria-label="Registered passkeys">
-              {state.passkeys.map((item) => (
-                <li key={item.id}>
-                  <span>
-                    <strong>{item.name}</strong>
-                    <small>Added {new Date(item.createdAt).toLocaleDateString()}</small>
-                  </span>
-                  <button
-                    className="btn btn-secondary"
-                    type="button"
-                    disabled={busy}
-                    aria-label={`Remove ${item.name}`}
-                    onClick={() => void remove(item.id)}
-                  >
-                    <Trash2 size={16} aria-hidden="true" /> Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <form className="form-stack passkey-add-form" onSubmit={(event) => void register(event)}>
-            <label htmlFor="passkey-name">Device name</label>
-            <input
-              id="passkey-name"
-              className="input"
-              value={name}
-              maxLength={60}
-              required
-              placeholder="e.g. Personal laptop"
-              onChange={(event) => setName(event.target.value)}
-            />
-            <label htmlFor="passkey-password">Confirm owner password</label>
-            <input
-              id="passkey-password"
-              className="input"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              required
-              onChange={(event) => setPassword(event.target.value)}
-            />
-            <button className="btn btn-primary" type="submit" disabled={busy}>
-              <Fingerprint size={17} aria-hidden="true" /> {busy ? 'Working…' : 'Add a passkey'}
+    <>
+      <SettingRow
+        title="Passkeys"
+        description={
+          state.enabled
+            ? 'Sign in with your fingerprint, face or device PIN instead of typing the password. The password still works as a backup.'
+            : 'Sign in with your fingerprint or face instead of the password. Available once Ember runs on its own web address with a PostgreSQL database.'
+        }
+      />
+      {state.enabled &&
+        state.passkeys.map((item) => (
+          <SettingRow
+            key={item.id}
+            title={item.name}
+            description={`Added ${new Date(item.createdAt).toLocaleDateString()}`}
+          >
+            <button
+              className="btn btn-secondary"
+              type="button"
+              disabled={busy}
+              aria-label={`Remove ${item.name}`}
+              onClick={() => void remove(item.id)}
+            >
+              <Trash2 size={16} aria-hidden="true" /> Remove
             </button>
-          </form>
-        </>
+          </SettingRow>
+        ))}
+      {state.enabled && (
+        <form
+          className="setting-row setting-row-stacked passkey-add-form"
+          onSubmit={(event) => void register(event)}
+        >
+          <div className="form-two-grid">
+            <label htmlFor="passkey-name">
+              Name this device
+              <input
+                id="passkey-name"
+                className="input"
+                value={name}
+                maxLength={60}
+                required
+                placeholder="e.g. My laptop"
+                onChange={(event) => setName(event.target.value)}
+              />
+            </label>
+            <label htmlFor="passkey-password">
+              Owner password
+              <input
+                id="passkey-password"
+                className="input"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                required
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </label>
+          </div>
+          <button className="btn btn-primary" type="submit" disabled={busy}>
+            <Fingerprint size={17} aria-hidden="true" /> {busy ? 'Working…' : 'Add a passkey'}
+          </button>
+        </form>
       )}
-      {error && <p className="form-error" role="alert">{error}</p>}
-      {message && <p className="form-success" role="status">{message}</p>}
-    </section>
+      {error && (
+        <p className="form-error setting-feedback" role="alert">
+          {error}
+        </p>
+      )}
+      {message && (
+        <p className="form-success setting-feedback" role="status">
+          {message}
+        </p>
+      )}
+    </>
   );
 }

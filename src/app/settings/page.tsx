@@ -1,40 +1,66 @@
 'use client';
+import { PasskeyManager } from '@/components/auth/PasskeyManager';
 import { BackgroundCustomizer } from '@/components/settings/BackgroundCustomizer';
 import { CategorySettings } from '@/components/settings/CategorySettings';
-import { CurrencySettings } from '@/components/settings/CurrencySettings';
-import { DataManagement } from '@/components/settings/DataManagement';
-import { PasskeyManager } from '@/components/auth/PasskeyManager';
+import { DataManagement, SignOutRow } from '@/components/settings/DataManagement';
+import {
+  FeatureSettings,
+  MoneySettings,
+  TargetSettings,
+} from '@/components/settings/PreferenceSettings';
+import { SettingsGroup } from '@/components/settings/SettingsUI';
 import { SystemManual } from '@/components/settings/SystemManual';
-import { ChevronDown, Palette } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
+
+const SECTIONS = [
+  ['money', 'Money'],
+  ['targets', 'Targets'],
+  ['categories', 'Categories'],
+  ['features', 'Features'],
+  ['appearance', 'Appearance'],
+  ['security', 'Security'],
+  ['data', 'Your data'],
+] as const;
+
 export default function SettingsPage() {
   return (
     <div className="settings-stack">
       <div className="page-header">
         <div>
           <h1 className="page-title">Settings</h1>
-          <p className="page-subtitle">Storage, privacy, currencies, and personal targets</p>
         </div>
       </div>
-      <PasskeyManager />
+      <nav className="settings-nav" aria-label="Settings sections">
+        {SECTIONS.map(([id, label]) => (
+          <a key={id} href={`#${id}`}>
+            {label}
+          </a>
+        ))}
+      </nav>
+      <MoneySettings />
+      <TargetSettings />
+      <div id="categories" className="settings-anchor">
+        <CategorySettings />
+      </div>
+      <FeatureSettings />
+      <SettingsGroup id="appearance" title="Appearance">
+        <details className="appearance-section">
+          <summary className="setting-row appearance-summary">
+            <span className="setting-row-text">
+              <span className="setting-row-title">Background & appearance</span>
+              <span className="setting-row-description">Choose a preset or your own photo.</span>
+            </span>
+            <ChevronDown size={20} aria-hidden="true" className="appearance-chevron" />
+          </summary>
+          <BackgroundCustomizer />
+        </details>
+      </SettingsGroup>
+      <SettingsGroup id="security" title="Sign-in & security">
+        <PasskeyManager />
+        <SignOutRow />
+      </SettingsGroup>
       <DataManagement />
-      <CurrencySettings />
-      <CategorySettings />
       <SystemManual />
-      <details className="ember-glass-static appearance-section">
-        <summary className="appearance-summary">
-          <span className="appearance-icon" aria-hidden="true">
-            <Palette size={22} />
-          </span>
-          <span className="appearance-summary-copy">
-            <span className="appearance-summary-title">Background & appearance</span>
-            <span className="appearance-summary-description">Presets and custom photos</span>
-          </span>
-          <span className="appearance-chevron" aria-hidden="true">
-            <ChevronDown size={20} />
-          </span>
-        </summary>
-        <BackgroundCustomizer />
-      </details>
     </div>
   );
 }
