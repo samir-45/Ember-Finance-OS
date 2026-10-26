@@ -260,7 +260,7 @@ test('all engines normalize annual and weekly recurring costs consistently', () 
     createdAt: localDate(),
   });
   assert.equal(computeSubscriptionMetrics(store.getSubscriptions(), 100000).mreUsdMinor, 1000);
-  assert.match(runRulesEngine().find((i) => i.id === 'subscriptions')!.body, /\$10\/month/);
+  assert.match(runRulesEngine().find((i) => i.id === 'subscriptions')!.body, /BDT\s1,200\/month/);
   assert.equal(
     computeSubscriptionMetrics(
       [{ amountMinor: 1200, currency: 'USD', billingCycle: 'weekly', active: true }],
@@ -392,6 +392,26 @@ test('income baseline uses complete months and ignores the size of a partial cur
     }),
   );
   assert.equal(computeIncomeBaseline(), 100000);
+});
+test('spending alerts ignore months before tracking began and use the preferred currency', () => {
+  const month = localMonth();
+  for (const i of [-2, -1, 0])
+    store.createTransaction(
+      expense({
+        id: `rent${i}`,
+        categoryId: 'rent',
+        amountMinor: 1200000,
+        date: `${shiftMonth(month, i)}-01`,
+      }),
+    );
+  const ids = () => runRulesEngine().map((i) => i.id);
+  assert.ok(!ids().includes('category:rent'), 'steady rent is not an increase');
+  store.createTransaction(
+    expense({ id: 'rent-extra', categoryId: 'rent', amountMinor: 600000, date: `${month}-01` }),
+  );
+  const alert = runRulesEngine().find((i) => i.id === 'category:rent');
+  assert.ok(alert, 'a real increase is still reported');
+  assert.match(alert.body, /BDT\s18,000.*BDT\s12,000/);
 });
 test('money lent to a friend stays in net worth but not in spendable funds or runway until repaid', () => {
   store.createTransaction(

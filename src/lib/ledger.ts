@@ -277,8 +277,9 @@ export const ledgerSchema = z
     }
   });
 
+// Validated so its field order matches stored ledgers; startup compares them as JSON text.
 export function emptyLedger(): LedgerSnapshot {
-  return {
+  return validateLedger({
     version: 2,
     accounts: [],
     categories: [
@@ -329,7 +330,7 @@ export function emptyLedger(): LedgerSnapshot {
     allocations: [],
     reconciliations: [],
     settings: settingsSchema.parse({}),
-  };
+  });
 }
 export function validateLedger(data: unknown): LedgerSnapshot {
   const result = ledgerSchema.safeParse(data);

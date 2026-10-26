@@ -6,8 +6,11 @@ import {
   computeSubscriptionMetrics,
   formatMoney,
   getFinancialTransactions,
+  paired,
+  reportingBdt,
   reportingUsd,
 } from './finance';
+import { isSettled } from './ledger';
 import { store } from './store';
 export function runRulesEngine(): CoachInsight[] {
   const data = computeDashboard(),
@@ -32,6 +35,8 @@ export function runRulesEngine(): CoachInsight[] {
       period: month,
       createdAt: new Date().toISOString(),
     });
+  const currency = s.settings.baseCurrency;
+  const reporting = currency === 'USD' ? reportingUsd : reportingBdt;
   const target = s.settings.savingsTargetPercent ?? 20;
   if (data.incomeThisMonth.usdMinor > 0)
     add(
@@ -39,7 +44,7 @@ export function runRulesEngine(): CoachInsight[] {
       data.savingsRatePercent >= target ? 'win' : 'warning',
       data.savingsRatePercent >= target ? 'info' : 'warning',
       `Savings rate: ${data.savingsRatePercent.toFixed(1)}%`,
-      `Your recorded surplus is ${formatMoney(data.incomeThisMonth.usdMinor - data.expensesThisMonth.usdMinor, 'USD')}. Your chosen savings target is ${target}%.`,
+      `Your recorded surplus is ${paired({ usdMinor: data.incomeThisMonth.usdMinor - data.expensesThisMonth.usdMinor, bdtMinor: data.incomeThisMonth.bdtMinor - data.expensesThisMonth.bdtMinor }, currency)}. Your chosen savings target is ${target}%.`,
       'Review cash flow',
     );
   else
@@ -75,7 +80,7 @@ export function runRulesEngine(): CoachInsight[] {
       sub.subToIncomeRatio > (s.settings.subscriptionLimitPercent ?? 5) ? 'warning' : 'tip',
       sub.subToIncomeRatio > (s.settings.subscriptionLimitPercent ?? 5) ? 'warning' : 'info',
       'Recurring cost review',
-      `${sub.activeCount} active bills cost approximately ${formatMoney(sub.mreUsdMinor, 'USD')}/month.${income > 0 ? ` That is ${sub.subToIncomeRatio.toFixed(1)}% of recorded baseline income.` : ' Add income history to calculate a burden ratio.'}`,
+      `${sub.activeCount} active bills cost approximately ${paired({ usdMinor: sub.mreUsdMinor, bdtMinor: sub.mreBdtMinor }, currency)}/month.${income > 0 ? ` That is ${sub.subToIncomeRatio.toFixed(1)}% of recorded baseline income.` : ' Add income history to calculate a burden ratio.'}`,
       'Review recurring bills',
     );
   for (const budget of data.budgets.filter((b) => b.spentMinor > b.limitMinor))
@@ -88,8 +93,13 @@ export function runRulesEngine(): CoachInsight[] {
       'Review category activity',
     );
   const transactions = getFinancialTransactions();
+  // Months before the first recorded expense are not tracked, so they must not count as zero.
+  const first = transactions
+    .filter((t) => t.type === 'expense' && isSettled(t))
+    .map((t) => t.date.slice(0, 7))
+    .sort()[0];
+  const history = [-3, -2, -1].map((i) => shiftMonth(month, i)).filter((m) => first && m >= first);
   for (const category of s.categories.filter((c) => c.type === 'expense')) {
-    const history = [-3, -2, -1].map((i) => shiftMonth(month, i));
     const previous = history.map((m) =>
       transactions
         .filter(
@@ -100,9 +110,9 @@ export function runRulesEngine(): CoachInsight[] {
             t.categoryId === category.id &&
             t.date.startsWith(m),
         )
-        .reduce((n, t) => n + reportingUsd(t), 0),
+        .reduce((n, t) => n + reporting(t), 0),
     );
-    const avg = previous.reduce((a, b) => a + b, 0) / 3;
+    const avg = history.length ? previous.reduce((a, b) => a + b, 0) / history.length : 0;
     const current = transactions
       .filter(
         (t) =>
@@ -112,14 +122,14 @@ export function runRulesEngine(): CoachInsight[] {
           t.categoryId === category.id &&
           t.date.startsWith(month),
       )
-      .reduce((n, t) => n + reportingUsd(t), 0);
+      .reduce((n, t) => n + reporting(t), 0);
     if (avg > 0 && current > avg * 1.3)
       add(
         `category:${category.id}`,
         'warning',
         'warning',
         `${category.name} spending increased`,
-        `Current month-to-date spending is ${formatMoney(current, 'USD')} versus ${formatMoney(Math.round(avg), 'USD')} averaged over the previous three calendar months.`,
+        `Current month-to-date spending is ${formatMoney(current, currency)} versus ${formatMoney(Math.round(avg), currency)} averaged over the previous ${history.length === 1 ? 'month' : `${history.length} months`}.`,
         'Review category activity',
       );
   }

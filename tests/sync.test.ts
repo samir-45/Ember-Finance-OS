@@ -172,3 +172,35 @@ test('first connection cannot overwrite a competing save after inspecting the em
   assert.equal(store.getAccounts()[0].name, 'Offline NSave');
   assert.equal(store.getLocalState().dirty, true);
 });
+test('a new browser whose empty copy was reloaded still loads the server ledger without a conflict', async () => {
+  // Reloading stores the validated empty ledger, whose field order differs from the template.
+  const blank = emptyLedger();
+  blank.categories = blank.categories.map(({ type, ...rest }) => ({ ...rest, type }));
+  memory.set(
+    LEDGER_KEY,
+    JSON.stringify({
+      ledger: blank,
+      revision: 0,
+      cloudRevision: null,
+      dirty: false,
+      mode: 'cloud',
+    }),
+  );
+  const remote = emptyLedger();
+  remote.accounts.push({
+    id: 'bank',
+    name: 'Bank Asia',
+    type: 'bank',
+    currency: 'BDT',
+    openingBalanceMinor: 2500000,
+    color: '#fff',
+    createdAt: '2026-01-01',
+  });
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ success: true, revision: 25, data: remote, provider: 'file' }), {
+      status: 200,
+    });
+  assert.equal(await pullFromCloud(), true);
+  assert.equal(store.getAccounts()[0]?.name, 'Bank Asia');
+  assert.equal(store.getLocalState().cloudRevision, 25);
+});
