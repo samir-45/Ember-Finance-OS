@@ -30,8 +30,8 @@ const categorySchema = z.object({
 export const settingsSchema = z.object({
   baseCurrency: currency.default('BDT'),
   displayCurrency: z.enum(['USD', 'BDT', 'original']).default('BDT'),
-  aiCoachEnabled: z.boolean().default(false),
-  shareAiDetails: z.boolean().default(false),
+  // Owner consent to send typed entry text and account/category names to Google.
+  aiQuickEntry: z.boolean().default(false),
   compactMode: z.boolean().default(false),
   givingPercent: z.number().min(0).max(100).default(0),
   savingsTargetPercent: z.number().min(0).max(100).default(20),

@@ -35,7 +35,7 @@ Before recording activity, set your USD/BDT reference rate in Settings. The init
 - Server synchronization requires the owner password and an HTTP-only session cookie. Every ledger and AI handler verifies authorization and request origin.
 - A save replaces one complete, validated ledger atomically, using an expected revision. Previous revisions are retained. A change from a tab or device that is behind is rejected, and that tab reloads the saved records.
 - PostgreSQL errors do not silently fall back to files. A file vault must be explicitly configured on durable storage.
-- External AI is disabled by default. Requests require owner sign-in, the server allow switch, both privacy preferences, and an explicit user action. Entry text and financial summaries may be sent to Google when enabled.
+- AI quick entry is optional and off by default. It needs `GEMINI_API_KEY` on the server and the Settings switch; it then sends only the text you type in Add activity plus your account and category names to Google Gemini, when you press Fill in. All insights and checks are calculated locally without AI.
 
 ## Owner access and server configuration
 

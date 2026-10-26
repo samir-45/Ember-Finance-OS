@@ -113,7 +113,7 @@ To recover an earlier revision, export its `payload` as a version-2 JSON ledger 
 
 For complete erasure, account for PostgreSQL history/legacy tables, file revisions, exported backups and provider backups under the relevant retention policy. Restoring an archive does not securely erase those copies.
 
-External AI additionally requires `EMBER_ENABLE_EXTERNAL_AI=true`, a valid provider key/model, both user privacy preferences, and a user request. Provider availability and policy are verified separately. Failure leaves local deterministic insights and manual entry available.
+AI quick entry requires `GEMINI_API_KEY` (and an explicit `GEMINI_MODEL`), the owner's Settings switch, and a Fill in action. Only the typed entry text and account/category names are sent. Without it, entries are typed manually and every insight still works.
 
 ## Explicit full fresh start
 

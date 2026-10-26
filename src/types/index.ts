@@ -130,8 +130,7 @@ export interface CoachInsight {
 export interface UserSettings {
   baseCurrency: Currency;
   displayCurrency: 'USD' | 'BDT' | 'original';
-  aiCoachEnabled: boolean;
-  shareAiDetails: boolean;
+  aiQuickEntry: boolean;
   compactMode: boolean;
   givingPercent?: number;
   savingsTargetPercent?: number;

@@ -15,6 +15,7 @@ import {
   type LedgerEntry,
 } from '@/lib/finance';
 import { store } from '@/lib/store';
+import { useAiAvailable } from '@/lib/use-ai';
 import { useLedgerVersion } from '@/lib/use-ledger';
 import type { Transaction, TransactionStatus } from '@/types';
 import Link from 'next/link';
@@ -46,6 +47,7 @@ function TransactionsContent() {
   const [error, setError] = useState('');
   const [aiPrompt, setAiPrompt] = useState('');
   const [parsing, setParsing] = useState(false);
+  const aiReady = useAiAvailable() && s.settings.aiQuickEntry;
   const account = s.accounts.find((a) => a.id === accountId);
   const show = (tx?: Transaction) => {
     const acc =
@@ -129,13 +131,10 @@ function TransactionsContent() {
     setParsing(true);
     setError('');
     try {
-      if (!s.settings.aiCoachEnabled || !s.settings.shareAiDetails)
-        throw new Error('Enable AI and sharing consent in Settings first');
       const res = await fetch('/api/ai/parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          consent: { enabled: true, share: true },
           text: aiPrompt,
           accounts: s.accounts
             .filter((a) => !a.archived)
@@ -149,9 +148,13 @@ function TransactionsContent() {
       setMerchant(d.merchant);
       setAmount(String(d.amount));
       setType(d.type);
-      setAccountId(d.accountId);
+      if (d.accountId) setAccountId(d.accountId);
       setCategoryId(d.categoryId);
       setNote(d.note);
+      if (d.date) {
+        setDate(d.date);
+        setStatus(d.date > localDate() ? 'planned' : 'done');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not autofill');
     } finally {
@@ -385,31 +388,37 @@ function TransactionsContent() {
               }
             }}
           >
-            {s.settings.aiCoachEnabled && s.settings.shareAiDetails && !editing && (
-              <div className="form-stack">
+            {aiReady && !editing && (
+              <div className="quick-entry">
                 <label htmlFor="entry-ai-text">
-                  Optional AI autofill
-                  <input
-                    id="entry-ai-text"
-                    className="input"
-                    value={aiPrompt}
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    maxLength={4000}
-                    placeholder="Describe one income or expense"
-                  />
+                  Describe it
+                  <span className="quick-entry-row">
+                    <input
+                      id="entry-ai-text"
+                      className="input"
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter') return;
+                        e.preventDefault();
+                        if (aiPrompt.trim() && !parsing) void autofill();
+                      }}
+                      maxLength={4000}
+                      placeholder="Lunch 350 cash yesterday"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={parsing || !aiPrompt.trim()}
+                      onClick={() => void autofill()}
+                    >
+                      {parsing ? 'Filling…' : 'Fill in'}
+                    </button>
+                  </span>
                 </label>
-                <p>
-                  Your text and account/category labels will be sent to Google. Review every filled
-                  field before saving.
+                <p className="quick-entry-note">
+                  Sent to Google Gemini to fill the form below. Check it before saving.
                 </p>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={parsing || !aiPrompt.trim()}
-                  onClick={() => void autofill()}
-                >
-                  {parsing ? 'Requesting autofill…' : 'Request AI autofill'}
-                </button>
               </div>
             )}
             <label htmlFor="entry-type">

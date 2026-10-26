@@ -337,7 +337,6 @@ test('signed-in startup reads the vault without uploading unchanged records or r
   });
   await page.goto('/coach');
   await expect(page.getByRole('heading', { name: 'Current observations' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Request AI review' })).toBeDisabled();
   await page.waitForLoadState('networkidle');
   expect(sent.some((r) => r.url.includes('/api/db') && r.method === 'GET')).toBe(true);
   expect(sent.filter((r) => r.url.includes('/api/ai/') || r.method !== 'GET')).toEqual([]);
@@ -484,7 +483,7 @@ test('API rejects anonymous and cross-origin writes; owner sync rejects stale re
     ).status(),
   ).toBe(409);
   expect(
-    (await request.post('/api/ai/coach', { headers: { Origin: origin }, data: {} })).status(),
+    (await request.post('/api/ai/parse', { headers: { Origin: origin }, data: {} })).status(),
   ).toBe(400);
 });
 test('core pages have no automatically detected WCAG AA violations', async ({ page }) => {

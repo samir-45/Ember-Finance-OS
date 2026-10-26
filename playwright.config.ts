@@ -31,8 +31,7 @@ export default defineConfig({
       EMBER_OWNER_PASSWORD: 'ember-e2e-only-owner-password',
       EMBER_SESSION_SECRET: 'ember-e2e-only-session-secret-at-least-32-characters',
       EMBER_PUBLIC_URL: 'http://localhost:3100',
-      EMBER_ENABLE_EXTERNAL_AI: 'false',
-      GEMINI_API_KEY: 'disabled-browser-test',
+      GEMINI_API_KEY: '',
     },
   },
 });

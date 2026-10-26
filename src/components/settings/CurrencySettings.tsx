@@ -1,11 +1,13 @@
 'use client';
 import { store } from '@/lib/store';
+import { useAiAvailable } from '@/lib/use-ai';
 import { useLedgerVersion } from '@/lib/use-ledger';
 import type { Currency, UserSettings } from '@/types';
 import { useState } from 'react';
 export function CurrencySettings() {
   useLedgerVersion();
   const settings = store.getSettings();
+  const aiAvailable = useAiAvailable();
   const [rate, setRate] = useState(String(store.getReferenceRate()));
   const [givingDraft, setGivingDraft] = useState(String(settings.givingPercent ?? 0));
   const [message, setMessage] = useState('');
@@ -98,8 +100,8 @@ export function CurrencySettings() {
         </label>
         <p>
           Saved suggestion: {settings.givingPercent ?? 0}% of a selected income payment. In
-          Allocations & giving, choose a posted income and apply the percentage to fill a reservation.
-          Nothing is reserved automatically. This does not calculate zakat obligations.
+          Allocations & giving, choose a posted income and apply the percentage to fill a
+          reservation. Nothing is reserved automatically. This does not calculate zakat obligations.
         </p>
         <button className="btn btn-secondary" type="submit">
           Save giving suggestion
@@ -133,31 +135,18 @@ export function CurrencySettings() {
         <span>
           <input
             type="checkbox"
-            checked={settings.aiCoachEnabled}
-            onChange={(e) =>
-              update({
-                aiCoachEnabled: e.target.checked,
-                shareAiDetails: e.target.checked ? settings.shareAiDetails : false,
-              })
-            }
+            checked={settings.aiQuickEntry}
+            onChange={(e) => update({ aiQuickEntry: e.target.checked })}
           />{' '}
-          Enable optional external AI
-        </span>
-      </label>
-      <label>
-        <span>
-          <input
-            type="checkbox"
-            disabled={!settings.aiCoachEnabled}
-            checked={settings.shareAiDetails}
-            onChange={(e) => update({ shareAiDetails: e.target.checked })}
-          />{' '}
-          Allow sending financial summaries and entry text to Google for AI requests
+          Quick entry with AI
         </span>
       </label>
       <p>
-        AI runs only after you request it, both options are enabled, and you are signed in. Raw
-        entry text can contain personal details. Deterministic insights remain available without AI.
+        Adds a box to Add activity where you type something like “Lunch 350 cash yesterday” and the
+        form fills itself. Only the text you type and your account and category names are sent to
+        Google Gemini, and only when you press Fill in.
+        {!aiAvailable &&
+          ' Not set up on this server yet: add GEMINI_API_KEY to the server environment.'}
       </p>
       <label>
         <span>

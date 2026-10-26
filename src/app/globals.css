@@ -1876,3 +1876,25 @@ select.input optgroup {
     border-color: rgba(255, 255, 255, 0.6);
   }
 }
+
+/* AI quick entry: one line at the top of Add activity, visually set apart from the form. */
+.quick-entry {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-default);
+}
+.quick-entry-row {
+  display: flex;
+  gap: 8px;
+}
+.quick-entry-row .input {
+  flex: 1;
+  min-width: 0;
+}
+.quick-entry-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}

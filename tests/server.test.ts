@@ -3,8 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
-import { POST as aiCoach } from '../src/app/api/ai/coach/route';
-import { POST as aiParse } from '../src/app/api/ai/parse/route';
+import { GET as aiStatus, POST as aiParse } from '../src/app/api/ai/parse/route';
 import { DELETE, GET, POST } from '../src/app/api/db/route';
 import { emptyLedger } from '../src/lib/ledger';
 import { authenticated, createSession, verifyPassword } from '../src/lib/server/auth';
@@ -16,7 +15,7 @@ before(async () => {
   process.env.EMBER_SESSION_SECRET = 'test-only-independent-session-secret-at-least-32-characters';
   process.env.EMBER_STORAGE_DRIVER = 'file';
   process.env.EMBER_VAULT_PATH = path.join(directory, 'vault.json');
-  process.env.EMBER_ENABLE_EXTERNAL_AI = 'false';
+  delete process.env.GEMINI_API_KEY;
 });
 after(async () => {
   await fs.rm(directory, { recursive: true, force: true });
@@ -53,7 +52,7 @@ test('all financial and AI routes require owner authorization before touching st
   assert.equal((await GET(request('GET', undefined, false))).status, 401);
   assert.equal((await POST(request('POST', {}, false))).status, 401);
   assert.equal((await DELETE(request('DELETE', {}, false))).status, 401);
-  assert.equal((await aiCoach(request('POST', {}, false))).status, 401);
+  assert.equal((await aiStatus(request('GET', undefined, false))).status, 401);
   assert.equal((await aiParse(request('POST', {}, false))).status, 401);
   assert.equal((await POST(request('POST', {}, true, 'https://attacker.example'))).status, 403);
 });
@@ -128,18 +127,59 @@ test('storage outages fail visibly without silently falling back or claiming suc
   assert.equal((await GET(request())).status, 503);
   process.env.EMBER_VAULT_PATH = file;
 });
-test('external AI requires explicit request consent even for an authenticated owner', async () => {
-  assert.equal((await aiCoach(request('POST', {}))).status, 400);
-  assert.equal((await aiParse(request('POST', { text: 'private text' }))).status, 400);
-  const body = {
-    consent: { enabled: true, share: true },
-    incomeUsdMinor: 100000,
-    expenseUsdMinor: 20000,
-    savingsRate: 80,
-    runwayMonths: 0,
-    hasExpenseHistory: false,
-    subBurdenPercent: 0,
-    topCategories: [],
+const entry = {
+  text: 'Lunch 350 taka cash yesterday',
+  accounts: [
+    { id: 'cash', name: 'Cash', currency: 'BDT' },
+    { id: 'nsave', name: 'NSave', currency: 'USD' },
+  ],
+  categories: [
+    { id: 'dining', name: 'Dining', type: 'expense' },
+    { id: 'client-payment', name: 'Client payment', type: 'income' },
+  ],
+};
+test('AI quick entry reports when it is not set up and validates its input', async () => {
+  assert.deepEqual(await (await aiStatus(request('GET'))).json(), { available: false });
+  assert.equal((await aiParse(request('POST', { text: '' }))).status, 400);
+  const off = await aiParse(request('POST', entry));
+  assert.equal(off.status, 503);
+  assert.match((await off.json()).error, /GEMINI_API_KEY/);
+});
+test('AI quick entry keeps good guesses, blanks wrong ones, and reports unreadable replies', async () => {
+  process.env.GEMINI_API_KEY = 'test-only-key';
+  const realFetch = globalThis.fetch;
+  let sent = '';
+  const reply = (value: unknown) => {
+    globalThis.fetch = async (_url, options) => {
+      sent = String(options?.body);
+      return new Response(
+        JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(value) }] } }] }),
+      );
+    };
   };
-  assert.equal((await aiCoach(request('POST', body))).status, 503);
+  try {
+    assert.deepEqual(await (await aiStatus(request('GET'))).json(), { available: true });
+    reply({
+      merchant: 'Lunch',
+      amount: 350,
+      currency: 'BDT',
+      type: 'expense',
+      accountId: 'nsave',
+      categoryId: 'dining',
+      date: '2026-10-25',
+      note: '',
+    });
+    const res = await aiParse(request('POST', entry));
+    assert.equal(res.status, 200);
+    const { data } = await res.json();
+    assert.equal(data.accountId, '', 'a USD account cannot hold a BDT entry');
+    assert.equal(data.categoryId, 'dining');
+    assert.equal(data.date, '2026-10-25');
+    assert.match(sent, /Lunch 350 taka cash yesterday/);
+    reply({ nonsense: true });
+    assert.equal((await aiParse(request('POST', entry))).status, 422);
+  } finally {
+    globalThis.fetch = realFetch;
+    delete process.env.GEMINI_API_KEY;
+  }
 });
