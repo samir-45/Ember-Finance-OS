@@ -277,49 +277,55 @@ export const ledgerSchema = z
     }
   });
 
+// Built-in categories. New ledgers start with all of them; existing ledgers are offered
+// the ones they lack when recording activity. Ids are stable because entries reference them.
+export const CATEGORY_PRESETS: {
+  id: string;
+  name: string;
+  type: 'income' | 'expense';
+  budgetGroup?: 'needs' | 'wants' | 'giving';
+}[] = [
+  { id: 'client-payment', name: 'Client payment', type: 'income' },
+  { id: 'salary', name: 'Salary', type: 'income' },
+  { id: 'bonus', name: 'Bonus', type: 'income' },
+  { id: 'refund', name: 'Refund', type: 'income' },
+  { id: 'gift-received', name: 'Gift received', type: 'income' },
+  { id: 'interest-profit', name: 'Interest & profit', type: 'income' },
+  { id: 'other-income', name: 'Other income', type: 'income' },
+  { id: 'groceries', name: 'Groceries', type: 'expense', budgetGroup: 'needs' },
+  { id: 'rent', name: 'Rent', type: 'expense', budgetGroup: 'needs' },
+  { id: 'utilities', name: 'Utilities', type: 'expense', budgetGroup: 'needs' },
+  { id: 'mobile-internet', name: 'Mobile & internet', type: 'expense', budgetGroup: 'needs' },
+  { id: 'transport', name: 'Transport', type: 'expense', budgetGroup: 'needs' },
+  { id: 'health', name: 'Health', type: 'expense', budgetGroup: 'needs' },
+  { id: 'education', name: 'Education', type: 'expense', budgetGroup: 'needs' },
+  { id: 'work-tools', name: 'Work tools', type: 'expense', budgetGroup: 'needs' },
+  { id: 'family', name: 'Family', type: 'expense', budgetGroup: 'needs' },
+  { id: 'fees', name: 'Fees', type: 'expense', budgetGroup: 'needs' },
+  { id: 'dining', name: 'Dining', type: 'expense', budgetGroup: 'wants' },
+  { id: 'shopping', name: 'Shopping', type: 'expense', budgetGroup: 'wants' },
+  { id: 'personal-care', name: 'Personal care', type: 'expense', budgetGroup: 'wants' },
+  { id: 'entertainment', name: 'Entertainment', type: 'expense', budgetGroup: 'wants' },
+  { id: 'travel', name: 'Travel', type: 'expense', budgetGroup: 'wants' },
+  { id: 'giving', name: 'Giving', type: 'expense', budgetGroup: 'giving' },
+  { id: 'other', name: 'Other', type: 'expense', budgetGroup: 'wants' },
+];
+export const presetCategory = (p: (typeof CATEGORY_PRESETS)[number]) => ({
+  id: p.id,
+  name: p.name,
+  type: p.type,
+  parentId: null,
+  color: p.type === 'income' ? '#6ee7a8' : '#ff8a5c',
+  icon: p.type === 'income' ? 'briefcase' : 'wallet',
+  ...(p.budgetGroup ? { budgetGroup: p.budgetGroup } : {}),
+});
+
 // Validated so its field order matches stored ledgers; startup compares them as JSON text.
 export function emptyLedger(): LedgerSnapshot {
   return validateLedger({
     version: 2,
     accounts: [],
-    categories: [
-      {
-        id: 'client-payment',
-        name: 'Client payment',
-        type: 'income',
-        parentId: null,
-        color: '#6ee7a8',
-        icon: 'briefcase',
-      },
-      ...(
-        [
-          'Groceries',
-          'Rent',
-          'Utilities',
-          'Transport',
-          'Health',
-          'Work tools',
-          'Dining',
-          'Shopping',
-          'Family',
-          'Giving',
-          'Fees',
-          'Other',
-        ] as const
-      ).map((name) => ({
-        id: name.toLowerCase().replaceAll(' ', '-'),
-        name,
-        type: 'expense' as const,
-        parentId: null,
-        color: '#ff8a5c',
-        icon: 'wallet',
-        budgetGroup: (['Dining', 'Shopping', 'Other'].includes(name)
-          ? 'wants'
-          : name === 'Giving'
-            ? 'giving'
-            : 'needs') as 'needs' | 'wants' | 'giving',
-      })),
-    ],
+    categories: CATEGORY_PRESETS.map(presetCategory),
     transactions: [],
     transfers: [],
     subscriptions: [],

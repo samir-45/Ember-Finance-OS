@@ -363,6 +363,44 @@ test('quick add opens a labeled dialog, keeps focus, and saves in account curren
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toBeHidden();
 });
+test('recording activity can use a suggested category or create a new one', async ({ page }) => {
+  db.data.categories = db.data.categories.filter((c) => c.id !== 'salary');
+  await page.goto('/transactions?quickAdd=1');
+  const dialog = page.getByRole('dialog', { name: 'Record activity' });
+  await dialog.getByRole('combobox', { name: 'Type', exact: true }).selectOption('income');
+  await dialog.getByRole('combobox', { name: 'Account', exact: true }).selectOption('bdt');
+  await dialog.getByLabel('Client / payer').fill('Employer');
+  await dialog.getByLabel('Amount (BDT)').fill('50000');
+  await dialog
+    .getByRole('combobox', { name: 'Category', exact: true })
+    .selectOption({ label: 'Salary' });
+  await dialog.getByRole('button', { name: 'Save activity' }).click();
+  await expect(dialog).toBeHidden();
+  await expect
+    .poll(() => db.data.transactions.find((t) => t.merchant === 'Employer')?.categoryId)
+    .toBe('salary');
+  expect(db.data.categories.filter((c) => c.id === 'salary')).toHaveLength(1);
+
+  await page.getByRole('button', { name: 'Add activity', exact: true }).last().click();
+  await dialog.getByRole('combobox', { name: 'Account', exact: true }).selectOption('bdt');
+  await dialog.getByLabel('Merchant / payee').fill('Vet clinic');
+  await dialog.getByLabel('Amount (BDT)').fill('800');
+  await dialog
+    .getByRole('combobox', { name: 'Category', exact: true })
+    .selectOption({ label: '+ New category…' });
+  await dialog.getByLabel('New expense category').fill('Pets');
+  await dialog.getByRole('button', { name: 'Save activity' }).click();
+  await expect(dialog).toBeHidden();
+  await expect
+    .poll(() => {
+      const pets = db.data.categories.find((c) => c.name === 'Pets');
+      return (
+        pets &&
+        db.data.transactions.find((t) => t.merchant === 'Vet clinic')?.categoryId === pets.id
+      );
+    })
+    .toBe(true);
+});
 test('transfer records both principal legs and fees, previews balances, and can be corrected', async ({
   page,
 }) => {

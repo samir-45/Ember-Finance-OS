@@ -152,6 +152,29 @@ export const store = {
   },
   getCategories: () => ledger.categories,
   createCategory: (c: Omit<Category, 'id'> & { id?: string }) => create<Category>('categories', c),
+  /** Returns the id of a same-named category of this type, creating it if needed. */
+  ensureCategory: (c: {
+    name: string;
+    type: 'income' | 'expense';
+    id?: string;
+    budgetGroup?: Category['budgetGroup'];
+  }): string => {
+    const name = c.name.trim();
+    if (!name) throw new Error('Enter a category name');
+    const existing = ledger.categories.find(
+      (x) => x.type === c.type && x.name.toLowerCase() === name.toLowerCase(),
+    );
+    if (existing) return existing.id;
+    return store.createCategory({
+      id: c.id && !ledger.categories.some((x) => x.id === c.id) ? c.id : undefined,
+      name,
+      type: c.type,
+      parentId: null,
+      color: c.type === 'income' ? '#6ee7a8' : '#ff8a5c',
+      icon: c.type === 'income' ? 'briefcase' : 'wallet',
+      ...(c.type === 'expense' ? { budgetGroup: c.budgetGroup ?? 'wants' } : {}),
+    }).id;
+  },
   updateCategory: (id: string, values: Partial<Category>) =>
     update<Category>('categories', id, values),
   deleteCategory: (id: string) => remove('categories', id),

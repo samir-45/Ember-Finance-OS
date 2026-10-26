@@ -2,6 +2,7 @@
 import { Dialog } from '@/components/ui/Dialog';
 import { parseOutput } from '@/lib/ai-contracts';
 import { localDate } from '@/lib/dates';
+import { CATEGORY_PRESETS } from '@/lib/ledger';
 import {
   categoryContains,
   dateLabel,
@@ -21,6 +22,9 @@ import type { Transaction, TransactionStatus } from '@/types';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
+// Category picker values that are not existing category ids.
+const NEW_CATEGORY = '__new';
+const PRESET_PREFIX = 'preset:';
 function TransactionsContent() {
   useLedgerVersion();
   const searchParams = useSearchParams();
@@ -40,6 +44,7 @@ function TransactionsContent() {
   const [type, setType] = useState<'income' | 'expense'>('expense');
   const [accountId, setAccountId] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [newCategory, setNewCategory] = useState('');
   const [note, setNote] = useState('');
   const [date, setDate] = useState(localDate());
   const [status, setStatus] = useState<TransactionStatus>('done');
@@ -60,6 +65,7 @@ function TransactionsContent() {
     setType(tx?.type === 'income' ? 'income' : 'expense');
     setAccountId(acc?.id ?? '');
     setCategoryId(tx?.categoryId ?? s.categories.find((c) => c.type === 'expense')?.id ?? '');
+    setNewCategory('');
     setNote(tx?.note ?? '');
     setDate(tx?.date ?? localDate());
     setStatus(tx?.status ?? 'done');
@@ -102,13 +108,31 @@ function TransactionsContent() {
       .filter((t) => t.type === 'income')
       .reduce((n, t) => n + reportingBdt(t), 0),
     expense = settled.filter((t) => t.type === 'expense').reduce((n, t) => n + reportingBdt(t), 0);
+  const ownCategories = s.categories.filter((c) => c.type === type);
+  // Built-in categories this ledger doesn't have yet; picking one adds it on save.
+  const suggestions = CATEGORY_PRESETS.filter(
+    (p) =>
+      p.type === type &&
+      !s.categories.some(
+        (c) =>
+          c.id === p.id || (c.type === p.type && c.name.toLowerCase() === p.name.toLowerCase()),
+      ),
+  );
+  const resolveCategory = (): string | null => {
+    if (categoryId === NEW_CATEGORY) return store.ensureCategory({ name: newCategory, type });
+    const preset = CATEGORY_PRESETS.find((p) => PRESET_PREFIX + p.id === categoryId);
+    if (preset) return store.ensureCategory(preset);
+    return categoryId || null;
+  };
   const save = () => {
     if (!account) throw new Error('Create or select a funding account');
+    // Validate the amount before adding any new category, so a typo doesn't leave one behind.
+    const amountMinor = toMinor(amount);
     const values = {
       accountId,
-      categoryId: categoryId || null,
+      categoryId: resolveCategory(),
       type,
-      amountMinor: toMinor(amount),
+      amountMinor,
       currency: account.currency,
       merchant: merchant.trim(),
       note,
@@ -496,15 +520,40 @@ function TransactionsContent() {
                 onChange={(e) => setCategoryId(e.target.value)}
               >
                 <option value="">Choose category</option>
-                {s.categories
-                  .filter((c) => c.type === type)
-                  .map((c) => (
+                <optgroup label="Your categories">
+                  {ownCategories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
                   ))}
+                </optgroup>
+                {suggestions.length > 0 && (
+                  <optgroup label="Suggested">
+                    {suggestions.map((p) => (
+                      <option key={p.id} value={PRESET_PREFIX + p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <option value={NEW_CATEGORY}>+ New category…</option>
               </select>
             </label>
+            {categoryId === NEW_CATEGORY && (
+              <label htmlFor="entry-new-category">
+                New {type} category
+                <input
+                  id="entry-new-category"
+                  className="input"
+                  required
+                  autoFocus
+                  maxLength={100}
+                  placeholder={type === 'income' ? 'e.g. Rental income' : 'e.g. Pets'}
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                />
+              </label>
+            )}
             <label htmlFor="entry-date">
               Date
               <input

@@ -579,3 +579,17 @@ test('reconciliation records differences without manufacturing a balance adjustm
   store.reconcile('bdt', 10000000);
   assert.equal(store.getAccounts()[1].reconciledAt, localDate());
 });
+test('categories added while recording reuse matching names and keep built-in ids', () => {
+  const ledger = fixture();
+  ledger.categories = ledger.categories.filter((c) => c.id !== 'salary');
+  load(ledger);
+  const salary = store.ensureCategory({ name: 'Salary', type: 'income', id: 'salary' });
+  assert.equal(salary, 'salary');
+  assert.equal(store.ensureCategory({ name: '  salary ', type: 'income' }), 'salary');
+  const pets = store.ensureCategory({ name: 'Pets', type: 'expense' });
+  assert.equal(store.ensureCategory({ name: 'PETS', type: 'expense' }), pets);
+  const created = store.getCategories().find((c) => c.id === pets)!;
+  assert.equal(created.budgetGroup, 'wants');
+  assert.equal(store.getCategories().filter((c) => c.name.toLowerCase() === 'pets').length, 1);
+  assert.throws(() => store.ensureCategory({ name: '   ', type: 'expense' }), /category name/);
+});
