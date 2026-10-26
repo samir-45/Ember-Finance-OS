@@ -40,7 +40,6 @@ export function AccountsWidget({ accounts }: AccountsWidgetProps) {
                     style={{
                       fontSize: '0.6875rem',
                       color: 'var(--text-muted)',
-                      textTransform: 'capitalize',
                     }}
                   >
                     {accountTypeLabel(a.type)} · {a.currency}

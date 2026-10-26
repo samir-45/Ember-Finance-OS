@@ -3,7 +3,6 @@ import { localMonth } from '@/lib/dates';
 import { useLedgerVersion } from '@/lib/use-ledger';
 
 import { Dialog } from '@/components/ui/Dialog';
-import { PageGuide } from '@/components/ui/PageGuide';
 import {
   categoryContains,
   computeBudgetPacing,
@@ -101,7 +100,7 @@ export default function BudgetsPage() {
       {/* Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Monthly Budgets & Pacing</h1>
+          <h1 className="page-title">Budgets</h1>
           <p className="page-subtitle">
             Category limits and estimated pacing for variable spending
           </p>
@@ -119,40 +118,6 @@ export default function BudgetsPage() {
           <Plus size={15} /> Set Budget
         </button>
       </div>
-
-      {/* Budgets Guide */}
-      <PageGuide
-        pageTitle="Monthly Budgets & Pacing"
-        tagline="Linear pacing algorithms, safe daily allowances, and predictive month-end run-rate projections."
-        steps={[
-          {
-            title: 'Set Monthly Spending Caps',
-            description:
-              'Click "+ Set Budget" to set maximum spending limits on essential or discretionary categories (like Groceries, Dining, Shopping).',
-          },
-          {
-            title: 'Audit Linear Pacing Status',
-            description:
-              'Ember calculates whether your current spending velocity is ahead or behind what is normal for the current day of the month.',
-          },
-          {
-            title: 'Follow Safe Daily Allowances',
-            description:
-              'Check the "Daily safe allowance" line in each card to know exactly how much you can spend per remaining day without breaking your limit.',
-          },
-          {
-            title: 'Inspect Run-Rate Projections',
-            description:
-              'If you keep your current burn rate, Ember forecasts your final month-end bill before the month closes so you can course-correct early.',
-          },
-        ]}
-        concept={{
-          name: 'Burn Run-Rate & Linear Pacing',
-          explanation:
-            'Pacing % compares your actual percentage spent against (currentDay ÷ totalDaysInMonth). Over 115% flags as "Pacing Hot", while over 100% of the limit flags as "Exceeded".',
-        }}
-        proTip="Start with the categories you want to control. Compare limits with your actual bills and income; pacing is most useful for variable spending."
-      />
 
       {store.getBudgets().some((b) => b.month === 'unassigned') && (
         <section className="ember-glass settings-card">
@@ -183,9 +148,8 @@ export default function BudgetsPage() {
         </section>
       )}
       <p className="page-subtitle">
-        Pacing is an estimate for variable spending. Fixed bills can be due at the beginning of the
-        month. Parent budgets include child categories; summary totals count nested limits only
-        once.
+        Daily amounts assume even spending through the month, so they suit groceries or transport
+        better than rent paid on the 1st.
       </p>
       {/* High-level Summary Cards */}
       <div
@@ -196,7 +160,7 @@ export default function BudgetsPage() {
         }}
       >
         <div className="ember-glass" style={{ padding: '24px' }}>
-          <span className="label-uppercase">Total Allocated Budget</span>
+          <span className="label-uppercase">Budgeted</span>
           <p className="text-money" style={{ marginTop: 6 }}>
             {formatMoney(totalBudgetedBdt, 'BDT')}
           </p>
@@ -206,7 +170,7 @@ export default function BudgetsPage() {
         </div>
 
         <div className="ember-glass" style={{ padding: '24px' }}>
-          <span className="label-uppercase">Month-to-Date Spending</span>
+          <span className="label-uppercase">Spent so far</span>
           <p
             className="text-money"
             style={{
@@ -225,12 +189,12 @@ export default function BudgetsPage() {
         </div>
 
         <div className="ember-glass" style={{ padding: '24px' }}>
-          <span className="label-uppercase">Remaining Capacity</span>
+          <span className="label-uppercase">Left to spend</span>
           <p className="text-money" style={{ marginTop: 6, color: 'var(--color-income)' }}>
             {formatMoney(Math.max(0, totalBudgetedBdt - totalSpentBdt), 'BDT')}
           </p>
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4 }}>
-            Safe buffer for remaining days
+            For the rest of the month
           </p>
         </div>
       </div>
@@ -308,16 +272,17 @@ export default function BudgetsPage() {
                       {pacing.status === 'exceeded'
                         ? 'Exceeded'
                         : pacing.status === 'warning'
-                          ? 'Pacing Hot'
+                          ? 'Spending fast'
                           : pacing.status === 'under'
-                            ? 'Pacing Under'
+                            ? 'Under budget'
                             : 'On Track'}
                     </span>
                     <button
                       onClick={() => handleDeleteBudget(b.id)}
                       className="btn btn-ghost btn-icon"
-                      style={{ color: 'var(--color-critical)', padding: 4, width: 24, height: 24 }}
-                      title="Remove Budget"
+                      style={{ color: 'var(--color-critical)' }}
+                      title="Remove budget"
+                      aria-label={`Remove ${cat?.name ?? 'this'} budget`}
                     >
                       <Trash2 size={13} />
                     </button>
@@ -373,13 +338,13 @@ export default function BudgetsPage() {
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Daily safe allowance:</span>
+                    <span style={{ color: 'var(--text-muted)' }}>You can spend per day:</span>
                     <span className="ember-number" style={{ fontWeight: 600 }}>
                       {formatMoney(pacing.dailyAllowanceMinor, b.currency)}/day
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Run-rate projection:</span>
+                    <span style={{ color: 'var(--text-muted)' }}>At this pace, month end:</span>
                     <span
                       className="ember-number"
                       style={{
@@ -394,7 +359,7 @@ export default function BudgetsPage() {
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Days remaining:</span>
+                    <span style={{ color: 'var(--text-muted)' }}>Days left:</span>
                     <span className="ember-number">{pacing.daysRemaining} days</span>
                   </div>
                 </div>

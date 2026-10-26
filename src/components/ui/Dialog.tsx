@@ -1,19 +1,28 @@
 'use client';
-import { ReactNode, useEffect, useId, useRef } from 'react';
+import { ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 export function Dialog({
   title,
   onClose,
   children,
+  variant = 'center',
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  // 'drawer' slides in from the left edge, next to the menu button that opens it.
+  variant?: 'center' | 'drawer';
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
+  const [closing, setClosing] = useState(false);
+  // User-initiated closes leave along the path they arrived on before unmounting.
+  const requestClose = () => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) onClose();
+    else setClosing(true);
+  };
+  const closeRef = useRef(requestClose);
+  closeRef.current = requestClose;
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const root = ref.current!;
@@ -77,10 +86,17 @@ export function Dialog({
     };
   }, []);
   return createPortal(
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className={`modal-overlay${variant === 'drawer' ? ' modal-overlay--drawer' : ''}`}
+      data-state={closing ? 'closing' : 'open'}
+      onClick={requestClose}
+      onAnimationEnd={(e) => {
+        if (closing && e.target === e.currentTarget) onClose();
+      }}
+    >
       <div
         ref={ref}
-        className="modal-content"
+        className={`modal-content${variant === 'drawer' ? ' modal-drawer' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -93,7 +109,7 @@ export function Dialog({
             type="button"
             className="btn btn-ghost btn-icon"
             aria-label="Close dialog"
-            onClick={onClose}
+            onClick={requestClose}
           >
             ×
           </button>

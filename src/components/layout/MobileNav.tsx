@@ -6,7 +6,7 @@ import { NAV_ITEMS } from './nav-config';
 export function MobileNav({ open, onClose }: { open: boolean; onClose: () => void }) {
   const path = usePathname();
   return open ? (
-    <Dialog title="Your workspace" onClose={onClose}>
+    <Dialog title="Your workspace" onClose={onClose} variant="drawer">
       <nav className="mobile-nav">
         {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
           <Link

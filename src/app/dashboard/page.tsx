@@ -2,7 +2,6 @@
 import { runRulesEngine } from '@/lib/rules-engine';
 import { store } from '@/lib/store';
 import { useLedgerVersion } from '@/lib/use-ledger';
-import Link from 'next/link';
 
 import { computeDashboard, formatMoney, shortMonth } from '@/lib/finance';
 import { useBackground } from '@/lib/background';
@@ -62,7 +61,12 @@ export default function DashboardPage() {
         <div>
           <p
             className="label-uppercase"
-            style={{ fontSize: '1.25rem', marginBottom: 12, fontWeight: 400, letterSpacing: '0.12em' }}
+            style={{
+              fontSize: '1.25rem',
+              marginBottom: 12,
+              fontWeight: 400,
+              letterSpacing: '0.12em',
+            }}
           >
             {new Intl.DateTimeFormat('en', {
               timeZone: 'Asia/Dhaka',
@@ -128,37 +132,28 @@ export default function DashboardPage() {
         />
       </div>
 
-      <section className="ember-glass settings-card settings-stack">
-        <div className="report-buckets">
-          <div>
-            <p>Giving reserved</p>
-            <strong>{formatMoney(data.givingReservedBdtMinor, 'BDT')}</strong>
-          </div>
-          <div>
-            <p>Giving paid this month</p>
-            <strong>{formatMoney(data.givingPaidBdtMinor, 'BDT')}</strong>
-          </div>
+      <section className="ember-glass settings-card">
+        <div className="report-buckets" style={{ marginTop: 0 }}>
           <div>
             <p>Bills due this month</p>
             <strong>{formatMoney(data.billsDueBdtMinor, 'BDT')}</strong>
           </div>
           <div>
-            <p>Current portfolio estimate</p>
+            <p>Total across accounts</p>
             <strong>{val(data.netWorth)}</strong>
           </div>
-        </div>
-        <p className="page-subtitle">
-          Local available money excludes funded goals, earmarked reserves, and uncovered bills due
-          this month. USD funds remain in their accounts until converted. Reference estimates are
-          not bank quotes.
-        </p>
-        <div className="action-row">
-          <Link className="btn btn-secondary" href="/allocations">
-            Allocate income or record giving
-          </Link>
-          <Link className="btn btn-secondary" href="/accounts">
-            Review NSave & bank balances
-          </Link>
+          {(data.givingReservedBdtMinor > 0 || data.givingPaidBdtMinor > 0) && (
+            <>
+              <div>
+                <p>Giving set aside</p>
+                <strong>{formatMoney(data.givingReservedBdtMinor, 'BDT')}</strong>
+              </div>
+              <div>
+                <p>Giving paid this month</p>
+                <strong>{formatMoney(data.givingPaidBdtMinor, 'BDT')}</strong>
+              </div>
+            </>
+          )}
         </div>
       </section>
       {/* Cash Flow + Money Health & Currency Clarity */}

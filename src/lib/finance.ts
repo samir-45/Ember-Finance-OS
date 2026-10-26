@@ -44,8 +44,16 @@ export function toMinor(value: string | number): number {
   return Number(minor);
 }
 export const fromMinor = (minor: number) => minor / 100;
-export const accountTypeLabel = (type: AccountType) =>
-  type === 'receivable' ? 'Lent out (owed to me)' : type;
+const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
+  bank: 'Bank',
+  wallet: 'Mobile wallet',
+  cash: 'Cash',
+  card: 'Card',
+  payoneer: 'Payoneer',
+  paypal: 'PayPal',
+  receivable: 'Lent out (owed to me)',
+};
+export const accountTypeLabel = (type: AccountType) => ACCOUNT_TYPE_LABELS[type];
 export function dateLabel(value?: string): string {
   return value
     ? new Intl.DateTimeFormat('en', {
@@ -171,6 +179,22 @@ export function getLedgerEntries(s = store.getSnapshot()): LedgerEntry[] {
       ];
     }),
   ].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+}
+// Overviews show one "From → To" row per transfer; per-account views keep both legs.
+export function oneRowPerTransfer(entries: LedgerEntry[], s = store.getSnapshot()): LedgerEntry[] {
+  const name = (id: string) => s.accounts.find((a) => a.id === id)?.name ?? 'Unknown';
+  return entries
+    .filter((t) => t.direction !== 'in')
+    .map((t) => {
+      const transfer = t.direction === 'out' && s.transfers.find((x) => x.id === t.transferId);
+      return transfer
+        ? {
+            ...t,
+            merchant: `${name(transfer.fromAccountId)} → ${name(transfer.toAccountId)}`,
+            direction: undefined,
+          }
+        : t;
+    });
 }
 export const reportingUsd = (t: Transaction) =>
   convertToUsd(t.amountMinor, t.currency, t.reportingRate ?? 121.5);
@@ -388,7 +412,7 @@ export function computeDashboard(): DashboardData {
       a.nextBillingDate.localeCompare(b.nextBillingDate),
     ),
     goals: s.goals,
-    recentTransactions: getLedgerEntries(s)
+    recentTransactions: oneRowPerTransfer(getLedgerEntries(s), s)
       .slice(0, 10)
       .map((t) => ({
         ...t,

@@ -28,7 +28,10 @@ export default function AllocationsPage() {
   const income = s.transactions.find((t) => t.id === incomeId);
   const percentValue = Number(percent);
   const validPercent =
-    percent.trim() !== '' && Number.isFinite(percentValue) && percentValue >= 0 && percentValue <= 100;
+    percent.trim() !== '' &&
+    Number.isFinite(percentValue) &&
+    percentValue >= 0 &&
+    percentValue <= 100;
   const suggestedAmountMinor =
     income && validPercent ? Math.round((income.amountMinor * percentValue) / 100) : null;
   const grouped = s.allocations.filter((a) => a.period === period);
@@ -64,21 +67,26 @@ export default function AllocationsPage() {
             onChange={(e) => setPeriod(e.target.value || localMonth())}
           />
         </label>
-        <p>
-          Giving reserves, bills, and savings reduce unreserved money in their accounts. “Living” is
-          a spending plan and stays available for everyday use. Reservations stay earmarked until
-          you pay or release them, including after the month ends.
-        </p>
-        <p>
-          Zakat and sadaqah are separate records. Enter the zakat amount you have determined for
-          your own review period; the income percentage shortcut does not calculate zakat
-          obligations.
-        </p>
-        <p>
-          Your saved giving suggestion is {s.settings.givingPercent ?? 0}% of a selected income
-          payment. Use it in Reserve money after choosing an income payment; no money is reserved
-          automatically. Opening account balances are not income payments.
-        </p>
+        <details className="more-filters">
+          <summary>How reservations work</summary>
+          <div className="settings-stack">
+            <p>
+              Giving reserves, bills, and savings reduce unreserved money in their accounts.
+              “Living” is a spending plan and stays available for everyday use. Reservations stay
+              earmarked until you pay or release them, including after the month ends.
+            </p>
+            <p>
+              Zakat and sadaqah are separate records. Enter the zakat amount you have determined for
+              your own review period; the income percentage shortcut does not calculate zakat
+              obligations.
+            </p>
+            <p>
+              Your saved giving suggestion is {s.settings.givingPercent ?? 0}% of a selected income
+              payment. Use it in Reserve money after choosing an income payment; no money is
+              reserved automatically. Opening account balances are not income payments.
+            </p>
+          </div>
+        </details>
       </section>
       <div className="account-grid">
         {grouped.map((a) => {

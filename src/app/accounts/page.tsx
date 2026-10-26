@@ -13,7 +13,7 @@ import { availableOf, balanceOf } from '@/lib/ledger';
 import { store } from '@/lib/store';
 import { useLedgerVersion } from '@/lib/use-ledger';
 import type { Account, Currency, TransactionStatus, Transfer } from '@/types';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 function previewAmount(value: string): number | null {
   try {
     return toMinor(value);
@@ -84,6 +84,12 @@ export default function AccountsPage() {
     setNote(t?.note ?? '');
     setTransferForm(true);
   };
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('transfer');
+    const found = id ? store.getTransfers().find((t) => t.id === id) : undefined;
+    if (found) openTransfer(found);
+    // Runs once on arrival; later ledger changes must not reopen the dialog.
+  }, []);
   const saveTransfer = () => {
     if (!from || !to) throw new Error('Choose both accounts');
     const amountOutMinor = toMinor(out),
@@ -162,13 +168,11 @@ export default function AccountsPage() {
               {a.type === 'receivable' ? (
                 <p>Not counted as spendable money. Record repayments as a transfer out.</p>
               ) : (
-                <p>Unreserved: {formatMoney(availableOf(s, a.id), a.currency)}</p>
+                availableOf(s, a.id) !== balanceOf(s, a.id) && (
+                  <p>Free to use: {formatMoney(availableOf(s, a.id), a.currency)}</p>
+                )
               )}
-              <p>
-                {a.reconciledAt
-                  ? `Matched statement on ${dateLabel(a.reconciledAt)}`
-                  : 'Not yet reconciled'}
-              </p>
+              {a.reconciledAt && <p>Matched statement on {dateLabel(a.reconciledAt)}</p>}
             </div>
             <div className="action-row">
               <button
@@ -177,7 +181,11 @@ export default function AccountsPage() {
               >
                 View ledger
               </button>
-              <button className="btn btn-secondary" onClick={() => openAccount(a)}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => openAccount(a)}
+                aria-label={`Edit ${a.name}`}
+              >
                 Edit
               </button>
               <button
@@ -189,29 +197,6 @@ export default function AccountsPage() {
                 }}
               >
                 Reconcile
-              </button>
-              <button
-                className="btn btn-secondary"
-                onClick={() =>
-                  guard(() => {
-                    store.updateAccount(a.id, { archived: !a.archived });
-                  })
-                }
-              >
-                {a.archived ? 'Unarchive' : 'Archive'}
-              </button>
-              <button
-                className="btn btn-danger"
-                onClick={() =>
-                  guard(() => {
-                    if (
-                      confirm(`Delete ${a.name}? Accounts with history must be archived instead.`)
-                    )
-                      store.deleteAccount(a.id);
-                  })
-                }
-              >
-                Delete
               </button>
             </div>
           </section>
@@ -292,8 +277,14 @@ export default function AccountsPage() {
                           accounts.find((a) => a.id === t.toAccountId)!.currency,
                         )}
                       </td>
-                      <td>{formatMoney(t.feeMinor, t.feeCurrency)}</td>
-                      <td>{t.status ?? 'done'}</td>
+                      <td>{t.feeMinor ? formatMoney(t.feeMinor, t.feeCurrency) : '—'}</td>
+                      <td>
+                        {(t.status ?? 'done') === 'done'
+                          ? 'Settled'
+                          : t.status === 'pending'
+                            ? 'Pending'
+                            : 'Planned'}
+                      </td>
                       <td>
                         <div className="action-row">
                           <button className="btn btn-secondary" onClick={() => openTransfer(t)}>
@@ -413,7 +404,45 @@ export default function AccountsPage() {
                 {error}
               </p>
             )}
-            <button className="btn btn-primary">Save account</button>
+            <div className="action-row">
+              <button className="btn btn-primary">Save account</button>
+              {editingAccount && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() =>
+                      guard(() => {
+                        store.updateAccount(editingAccount.id, {
+                          archived: !editingAccount.archived,
+                        });
+                        setAccountForm(false);
+                      })
+                    }
+                  >
+                    {editingAccount.archived ? 'Unarchive' : 'Archive'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={() =>
+                      guard(() => {
+                        if (
+                          !confirm(
+                            `Delete ${editingAccount.name}? Accounts with history must be archived instead.`,
+                          )
+                        )
+                          return;
+                        store.deleteAccount(editingAccount.id);
+                        setAccountForm(false);
+                      })
+                    }
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
+            </div>
           </form>
         </Dialog>
       )}

@@ -380,7 +380,7 @@ test('existing future-dated postings open with a review notice instead of blocki
   expect(saved.transfers[0].status).toBeUndefined();
   await page.goto('/transactions');
   await expect(page.getByRole('heading', { name: 'Transactions', exact: true })).toBeVisible();
-  await expect(page.getByRole('row').filter({ hasText: 'Fixture client' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit Fixture client' })).toBeVisible();
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze())
       .violations,
@@ -414,7 +414,7 @@ test('quick add opens a labeled dialog, keeps focus, and saves in account curren
   await dialog.getByRole('combobox', { name: 'Category', exact: true }).selectOption('groceries');
   await dialog.getByRole('button', { name: 'Save activity' }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByRole('cell', { name: 'Market', exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit Market' })).toBeVisible();
   const tx = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('ember_ledger_v2')!).ledger.transactions.find(
       (t: { merchant: string }) => t.merchant === 'Market',
@@ -448,10 +448,9 @@ test('transfer records both principal legs and fees, previews balances, and can 
   expect(s.transfers[0].amountOutMinor).toBe(10000);
   expect(s.transfers[0].amountInMinor).toBe(1200000);
   await page.goto('/transactions');
-  await expect(page.getByRole('cell', { name: 'Transfer fee', exact: false })).toBeVisible();
-  await expect(
-    page.getByRole('cell', { name: 'Transfer to Local Bank', exact: false }),
-  ).toBeVisible();
+  // The ledger shows each transfer as one "From → To" row plus its fee as an expense.
+  await expect(page.getByRole('link', { name: 'Open transfer: Transfer fee' })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Open transfer: .+ → Local Bank/ })).toBeVisible();
 });
 test('goal reservations cannot claim more than the source account holds', async ({ page }) => {
   await page.goto('/goals');

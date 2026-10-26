@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 import { SectionCard } from './SectionCard';
 
+const PALETTE = ['#ff8a5c', '#6ee7a8', '#7cc4ff', '#f5c76b', '#c59bff', '#ff6f91', '#5fd4c4'];
+
 interface CategoryPieChartProps {
   categorySpending: CategorySpending[];
   currency: Currency;
@@ -15,10 +17,17 @@ interface CategoryPieChartProps {
 export function CategoryPieChart({ categorySpending, currency }: CategoryPieChartProps) {
   const router = useRouter();
 
-  const pieData = categorySpending.map((c) => ({
+  // Keep a category's own colour unless an earlier slice already uses it.
+  const used = new Set<string>();
+  const colors = categorySpending.map((c, i) => {
+    const color = used.has(c.color) ? PALETTE[i % PALETTE.length] : c.color;
+    used.add(color);
+    return color;
+  });
+  const pieData = categorySpending.map((c, i) => ({
     name: c.categoryName,
     value: (currency === 'USD' ? c.amounts.usdMinor : c.amounts.bdtMinor) / 100,
-    color: c.color,
+    color: colors[i],
   }));
 
   return (
@@ -61,7 +70,7 @@ export function CategoryPieChart({ categorySpending, currency }: CategoryPieChar
               gap: 8,
             }}
           >
-            {categorySpending.slice(0, 6).map((cat) => (
+            {categorySpending.slice(0, 6).map((cat, i) => (
               <button
                 key={cat.categoryId}
                 onClick={() => router.push(`/transactions?categoryId=${cat.categoryId}`)}
@@ -85,7 +94,7 @@ export function CategoryPieChart({ categorySpending, currency }: CategoryPieChar
                 >
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span
-                      style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color }}
+                      style={{ width: 8, height: 8, borderRadius: '50%', background: colors[i] }}
                     />
                     {cat.categoryName}
                   </span>
@@ -102,7 +111,7 @@ export function CategoryPieChart({ categorySpending, currency }: CategoryPieChar
                 <div className="progress-bar">
                   <div
                     className="progress-bar-fill"
-                    style={{ width: `${cat.percentage}%`, background: cat.color }}
+                    style={{ width: `${cat.percentage}%`, background: colors[i] }}
                   />
                 </div>
               </button>

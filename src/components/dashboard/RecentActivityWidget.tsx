@@ -55,7 +55,11 @@ export function RecentActivityWidget({ transactions }: RecentActivityWidgetProps
                   <span>{tx.categoryName}</span>
                   <span>·</span>
                   <span>{dateLabel(tx.date)}</span>
-                  <span className={`badge badge-${tx.status}`}>{tx.status}</span>
+                  {tx.status !== 'done' && (
+                    <span className={`badge badge-${tx.status}`}>
+                      {tx.status === 'pending' ? 'Pending' : 'Planned'}
+                    </span>
+                  )}
                 </div>
               </div>
               <span
@@ -65,7 +69,7 @@ export function RecentActivityWidget({ transactions }: RecentActivityWidgetProps
                   color: tx.type === 'income' ? 'var(--color-income)' : 'var(--text-primary)',
                 }}
               >
-                {tx.type === 'income' ? '+' : '−'}
+                {tx.type === 'income' ? '+' : tx.type === 'transfer' ? '' : '−'}
                 {formatMoney(tx.amountMinor, tx.currency)}
               </span>
             </div>

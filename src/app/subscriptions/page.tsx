@@ -3,7 +3,6 @@ import { localDate } from '@/lib/dates';
 import { useLedgerVersion } from '@/lib/use-ledger';
 
 import { Dialog } from '@/components/ui/Dialog';
-import { PageGuide } from '@/components/ui/PageGuide';
 import {
   computeIncomeBaseline,
   computeSubscriptionMetrics,
@@ -76,6 +75,18 @@ export default function SubscriptionsPage() {
     }
   };
 
+  const openEdit = (sub: Subscription) => {
+    setEditingSub(sub);
+    setName(sub.name);
+    setAmount(String(sub.amountMinor / 100));
+    setCurrency(sub.currency);
+    setBillingCycle(sub.billingCycle);
+    setNextBillingDate(sub.nextBillingDate);
+    setAccountId(sub.accountId ?? '');
+    setCategoryId(sub.categoryId ?? '');
+    setShowModal(true);
+  };
+
   // Record Payment / Renew
   const handleMarkPaid = (sub: Subscription) => {
     store.recordSubscriptionPayment(sub.id, sub.nextBillingDate);
@@ -142,43 +153,9 @@ export default function SubscriptionsPage() {
           }}
           className="btn btn-primary btn-sm"
         >
-          <Plus size={15} /> Add Subscription
+          <Plus size={15} /> Add bill
         </button>
       </div>
-
-      {/* Subscriptions Guide */}
-      <PageGuide
-        pageTitle="Subscriptions & Recurring Commitments"
-        tagline="Track SaaS licenses, normalize billing frequencies, and audit recurring overhead."
-        steps={[
-          {
-            title: 'Catalog Commitments',
-            description:
-              'Add active recurring services, choosing their billing cycle (monthly, quarterly, or yearly) and source account.',
-          },
-          {
-            title: 'Normalize MRE & ARR',
-            description:
-              'The engine normalizes different billing cycles into standard Monthly Recurring Expense (MRE) and Annual Run Rate (ARR).',
-          },
-          {
-            title: 'Audit Burden Ratio',
-            description:
-              'Compare normalized recurring costs with your chosen target in Settings. Essential work tools and living bills can require different personal limits.',
-          },
-          {
-            title: 'One-Click Renewal Logging',
-            description:
-              'Click "Record Renewal" on any card to instantly log an expense transaction and automatically advance the next billing date by one cycle.',
-          },
-        ]}
-        concept={{
-          name: 'Recurring Burden Ratio & MRE Normalization',
-          explanation:
-            'Monthly cost standardizes annual, quarterly, and weekly charges. The burden ratio uses up to three complete income months, or current income when no complete history exists.',
-        }}
-        proTip="Toggle any subscription to 'Paused' if you are taking a break from the service—this preserves the record and immediately recalculates your true active monthly burn rate."
-      />
 
       {/* Analytics Summary */}
       <div
@@ -189,7 +166,7 @@ export default function SubscriptionsPage() {
         }}
       >
         <div className="ember-glass" style={{ padding: '24px' }}>
-          <span className="label-uppercase">Monthly Recurring Expense</span>
+          <span className="label-uppercase">Per month</span>
           <p className="text-money" style={{ marginTop: 6 }}>
             {formatMoney(metrics.mreUsdMinor, 'USD')}
           </p>
@@ -199,7 +176,7 @@ export default function SubscriptionsPage() {
         </div>
 
         <div className="ember-glass" style={{ padding: '24px' }}>
-          <span className="label-uppercase">Annualized Cost (ARR)</span>
+          <span className="label-uppercase">Per year</span>
           <p className="text-money" style={{ marginTop: 6, color: 'var(--color-accent)' }}>
             {formatMoney(metrics.arrUsdMinor, 'USD')}
           </p>
@@ -209,7 +186,7 @@ export default function SubscriptionsPage() {
         </div>
 
         <div className="ember-glass" style={{ padding: '24px' }}>
-          <span className="label-uppercase">Income Burden Ratio</span>
+          <span className="label-uppercase">Share of income</span>
           <p
             className="text-money"
             style={{
@@ -232,12 +209,12 @@ export default function SubscriptionsPage() {
         </div>
 
         <div className="ember-glass" style={{ padding: '24px' }}>
-          <span className="label-uppercase">Subscription Count</span>
+          <span className="label-uppercase">Active bills</span>
           <p className="text-money" style={{ marginTop: 6 }}>
             {metrics.activeCount}
           </p>
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4 }}>
-            {metrics.pausedCount} paused licenses
+            {metrics.pausedCount} paused
           </p>
         </div>
       </div>
@@ -321,8 +298,9 @@ export default function SubscriptionsPage() {
                     <button
                       onClick={() => handleDelete(s.id)}
                       className="btn btn-ghost btn-icon"
-                      style={{ color: 'var(--color-critical)', padding: 4, width: 26, height: 26 }}
+                      style={{ color: 'var(--color-critical)' }}
                       title="Delete"
+                      aria-label={`Delete ${s.name}`}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -353,14 +331,23 @@ export default function SubscriptionsPage() {
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                   Category: {cat?.name || 'General'}
                 </span>
-                <button
-                  disabled={!s.active}
-                  onClick={() => handleMarkPaid(s)}
-                  className="btn btn-secondary btn-sm"
-                  style={{ fontSize: '0.75rem' }}
-                >
-                  <Check size={13} /> Record Renewal
-                </button>
+                <div className="action-row" style={{ gap: 8 }}>
+                  <button
+                    onClick={() => openEdit(s)}
+                    className="btn btn-ghost btn-sm"
+                    aria-label={`Edit ${s.name}`}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    disabled={!s.active}
+                    onClick={() => handleMarkPaid(s)}
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '0.75rem' }}
+                  >
+                    <Check size={13} /> Mark paid
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -370,7 +357,7 @@ export default function SubscriptionsPage() {
       {/* Add / Edit Subscription Modal */}
       {showModal && (
         <Dialog
-          title={editingSub ? 'Edit Subscription' : 'Track New Subscription'}
+          title={editingSub ? 'Edit bill' : 'Add a bill or subscription'}
           onClose={() => setShowModal(false)}
         >
           <form

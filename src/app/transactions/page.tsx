@@ -9,6 +9,7 @@ import {
   exportTransactionsCsv,
   formatMoney,
   getLedgerEntries,
+  oneRowPerTransfer,
   reportingBdt,
   toMinor,
   type LedgerEntry,
@@ -73,7 +74,9 @@ function TransactionsContent() {
     setOpen(false);
     if (searchParams.get('quickAdd')) router.replace('/transactions', { scroll: false });
   };
-  const filtered = getLedgerEntries()
+  const accountName = (id: string) => s.accounts.find((a) => a.id === id)?.name ?? 'Unknown';
+  const entries = getLedgerEntries();
+  const filtered = (accountFilter === 'all' ? oneRowPerTransfer(entries) : entries)
     .filter(
       (t) =>
         (typeFilter === 'all' || t.type === typeFilter) &&
@@ -155,17 +158,21 @@ function TransactionsContent() {
       setParsing(false);
     }
   };
-  const remove = (tx: LedgerEntry) => {
-    setError('');
+  const remove = () => {
+    if (!editing || !confirm(`Delete "${editing.merchant}"?`)) return;
     try {
-      if (tx.transferId) {
-        if (confirm('Delete the entire linked transfer, both principal legs, and its fee?'))
-          store.deleteTransfer(tx.transferId);
-      } else if (confirm('Delete this transaction?')) store.deleteTransaction(tx.id);
+      store.deleteTransaction(editing.id);
+      close();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Cannot delete transaction');
+      setError(err instanceof Error ? err.message : 'Could not delete this entry');
     }
   };
+  const rowSign = (t: LedgerEntry) =>
+    t.type === 'income' || t.direction === 'in'
+      ? 'in'
+      : t.type === 'transfer' && !t.direction
+        ? 'move'
+        : 'out';
   return (
     <div className="settings-stack">
       <div className="page-header">
@@ -185,107 +192,114 @@ function TransactionsContent() {
           </button>
         </div>
       </div>
-      <div className="report-buckets">
+      <section className="ember-glass settings-card ledger-summary" aria-label="Totals">
         {[
-          ['Settled income', income],
-          ['Settled spending', expense],
-          ['Recorded surplus', income - expense],
+          ['Income', income],
+          ['Spending', expense],
+          ['Left over', income - expense],
         ].map(([label, value]) => (
-          <section className="ember-glass settings-card" key={label}>
+          <div key={label}>
             <p>{label}</p>
             <p className="text-money">{formatMoney(Number(value), 'BDT')}</p>
-          </section>
+          </div>
         ))}
-      </div>
-      <p className="page-subtitle">
-        Totals reflect the current filters, saved reporting rates, and settled entries. Transfer
-        principal is excluded from income and spending.
-      </p>
-      <section className="ember-glass settings-card action-row">
-        <label htmlFor="ledger-search">
-          Search
-          <input
-            id="ledger-search"
-            className="input"
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Payee, category, or note"
-          />
-        </label>
-        <label htmlFor="ledger-type">
-          Type
-          <select
-            id="ledger-type"
-            className="input"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-          >
-            <option value="all">All activity</option>
-            <option value="income">Income</option>
-            <option value="expense">Expenses & fees</option>
-            <option value="transfer">Transfers</option>
-          </select>
-        </label>
-        <label htmlFor="ledger-account">
-          Account
-          <select
-            id="ledger-account"
-            className="input"
-            value={accountFilter}
-            onChange={(e) => setAccountFilter(e.target.value)}
-          >
-            <option value="all">All accounts</option>
-            {s.accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label htmlFor="ledger-category">
-          Category
-          <select
-            id="ledger-category"
-            className="input"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-          >
-            <option value="all">All categories</option>
-            {s.categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label htmlFor="ledger-status">
-          Status
-          <select
-            id="ledger-status"
-            className="input"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="all">All statuses</option>
-            <option value="done">Settled</option>
-            <option value="pending">Pending</option>
-            <option value="planned">Planned</option>
-          </select>
-        </label>
-        <label htmlFor="ledger-sort">
-          Order
-          <select
-            id="ledger-sort"
-            className="input"
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-          >
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="largest">Largest BDT equivalent</option>
-          </select>
-        </label>
+        <p className="ledger-summary-note">Settled entries matching your filters, in BDT.</p>
+      </section>
+      <section className="ember-glass settings-card settings-stack">
+        <div className="action-row ledger-filters">
+          <label htmlFor="ledger-search">
+            Search
+            <input
+              id="ledger-search"
+              className="input"
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Payee, category, or note"
+            />
+          </label>
+          <label htmlFor="ledger-type">
+            Type
+            <select
+              id="ledger-type"
+              className="input"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+            >
+              <option value="all">All activity</option>
+              <option value="income">Income</option>
+              <option value="expense">Expenses & fees</option>
+              <option value="transfer">Transfers</option>
+            </select>
+          </label>
+          <label htmlFor="ledger-account">
+            Account
+            <select
+              id="ledger-account"
+              className="input"
+              value={accountFilter}
+              onChange={(e) => setAccountFilter(e.target.value)}
+            >
+              <option value="all">All accounts</option>
+              {s.accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <details
+          className="more-filters"
+          open={categoryFilter !== 'all' || statusFilter !== 'all' || sort !== 'newest'}
+        >
+          <summary>More filters</summary>
+          <div className="action-row ledger-filters">
+            <label htmlFor="ledger-category">
+              Category
+              <select
+                id="ledger-category"
+                className="input"
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+              >
+                <option value="all">All categories</option>
+                {s.categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label htmlFor="ledger-status">
+              Status
+              <select
+                id="ledger-status"
+                className="input"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="all">All statuses</option>
+                <option value="done">Settled</option>
+                <option value="pending">Pending</option>
+                <option value="planned">Planned</option>
+              </select>
+            </label>
+            <label htmlFor="ledger-sort">
+              Order
+              <select
+                id="ledger-sort"
+                className="input"
+                value={sort}
+                onChange={(e) => setSort(e.target.value)}
+              >
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="largest">Largest first</option>
+              </select>
+            </label>
+          </div>
+        </details>
       </section>
       {error && !open && (
         <p role="alert" className="form-error">
@@ -293,72 +307,64 @@ function TransactionsContent() {
         </p>
       )}
       <section className="ember-glass settings-card">
-        <div className="table-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Payee / activity</th>
-                <th>Account</th>
-                <th>Status</th>
-                <th>Amount</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.slice(0, pageSize).map((t) => (
-                <tr key={t.id}>
-                  <td>{dateLabel(t.date)}</td>
-                  <td>
-                    {t.merchant}
-                    <p>
-                      {t.type === 'transfer'
-                        ? 'Internal transfer'
-                        : (s.categories.find((c) => c.id === t.categoryId)?.name ??
-                          'Uncategorized')}
-                    </p>
-                    {t.note && <p className="page-subtitle">{t.note}</p>}
-                  </td>
-                  <td>{s.accounts.find((a) => a.id === t.accountId)?.name}</td>
-                  <td>
-                    {t.status === 'done'
-                      ? 'Settled'
-                      : t.status === 'pending'
-                        ? 'Pending'
-                        : 'Planned'}
-                  </td>
-                  <td className="ember-number">
-                    {t.type === 'income' || t.direction === 'in' ? '+' : '−'}
-                    {formatMoney(t.amountMinor, t.currency)}
-                  </td>
-                  <td>
-                    <div className="action-row">
-                      {t.transferId ? (
-                        <Link className="btn btn-secondary" href="/accounts">
-                          Manage transfer
-                        </Link>
-                      ) : (
-                        <button className="btn btn-secondary" onClick={() => show(t)}>
-                          Edit
-                        </button>
+        {filtered.length ? (
+          <ul className="ledger-list">
+            {filtered.slice(0, pageSize).map((t) => {
+              const sign = rowSign(t);
+              const meta = [
+                dateLabel(t.date),
+                t.type === 'transfer'
+                  ? 'Transfer'
+                  : (s.categories.find((c) => c.id === t.categoryId)?.name ?? 'Uncategorized'),
+                ...(t.type === 'transfer' && !t.direction ? [] : [accountName(t.accountId)]),
+              ].join(' · ');
+              const body = (
+                <>
+                  <span className="ledger-row-text">
+                    <span className="ledger-row-title">
+                      {t.merchant}
+                      {t.status !== 'done' && (
+                        <span className={`badge badge-${t.status}`}>
+                          {t.status === 'pending' ? 'Pending' : 'Planned'}
+                        </span>
                       )}
-                      <button className="btn btn-danger" onClick={() => remove(t)}>
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {!filtered.length && (
-                <tr>
-                  <td colSpan={6}>
-                    No matching activity. Add an account and record your first payment or expense.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                    </span>
+                    <span className="ledger-row-meta">{meta}</span>
+                    {t.note && <span className="ledger-row-meta">{t.note}</span>}
+                  </span>
+                  <span className={`ledger-row-amount ember-number ${sign}`}>
+                    {sign === 'in' ? '+' : sign === 'out' ? '−' : ''}
+                    {formatMoney(t.amountMinor, t.currency)}
+                  </span>
+                </>
+              );
+              return (
+                <li key={t.id}>
+                  {t.transferId ? (
+                    <Link
+                      className="ledger-row"
+                      href={`/accounts?transfer=${t.transferId}`}
+                      aria-label={`Open transfer: ${t.merchant}`}
+                    >
+                      {body}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ledger-row"
+                      onClick={() => show(t)}
+                      aria-label={`Edit ${t.merchant}`}
+                    >
+                      {body}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p>No matching activity. Add an account and record your first payment or expense.</p>
+        )}
         {filtered.length > pageSize && (
           <button className="btn btn-secondary" onClick={() => setPageSize((n) => n + 25)}>
             Show 25 more
@@ -545,7 +551,14 @@ function TransactionsContent() {
                 {error}
               </p>
             )}
-            <button className="btn btn-primary">Save activity</button>
+            <div className="action-row">
+              <button className="btn btn-primary">Save activity</button>
+              {editing && (
+                <button type="button" className="btn btn-danger" onClick={remove}>
+                  Delete
+                </button>
+              )}
+            </div>
             {!account && (
               <Link href="/accounts" onClick={close}>
                 Add an account first
